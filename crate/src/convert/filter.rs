@@ -11,6 +11,9 @@ static SELECTOR_MAIN_ARTICLE_SECTION_DIV: LazyLock<Vec<Selector>> = LazyLock::ne
 static SELECTOR_A: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a").expect("BUG: invalid SELECTOR_A"));
 
+static SELECTOR_A_BUTTON: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a, button").expect("BUG: invalid SELECTOR_A_BUTTON"));
+
 /// Penalty applied per link in text density calculation.
 const TEXT_DENSITY_LINK_PENALTY: i32 = 20;
 
@@ -64,19 +67,26 @@ pub fn filter_links(
     link_text_content_to_remove: Option<&[String]>,
     link_hrefs_to_remove: Option<&[String]>,
 ) -> String {
-    crate::util::remove_matching(html, |el| {
-        let name = el.value().name();
-        if name != "a" && name != "button" {
-            return false;
+    let mut fragment = Html::parse_fragment(html);
+    let ids: Vec<_> = fragment
+        .select(&SELECTOR_A_BUTTON)
+        .filter(|el| {
+            let text: String = el.text().collect();
+            let href = el.value().attr("href");
+            text.trim().is_empty()
+                || href.is_none()
+                || href.is_some_and(|h| h.starts_with('#'))
+                || should_remove_by_text(&text, link_text_content_to_remove)
+                || should_remove_by_href(href, link_hrefs_to_remove)
+        })
+        .map(|el| el.id())
+        .collect();
+    for id in ids {
+        if let Some(mut node) = fragment.tree.get_mut(id) {
+            node.detach();
         }
-        let text: String = el.text().collect();
-        let href = el.value().attr("href");
-        text.trim().is_empty()
-            || href.is_none()
-            || href.is_some_and(|h| h.starts_with('#'))
-            || should_remove_by_text(&text, link_text_content_to_remove)
-            || should_remove_by_href(href, link_hrefs_to_remove)
-    })
+    }
+    crate::util::serialize_fragment_body(&fragment)
 }
 
 fn should_remove_by_text(text: &str, patterns: Option<&[String]>) -> bool {

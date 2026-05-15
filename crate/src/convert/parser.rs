@@ -45,11 +45,17 @@ pub fn extract_title(document: &Html) -> Option<String> {
 const URL_META_KEYS: &[&str] = &[
     "og:url",
     "og:image",
+    "og:image:url",
     "og:image:secure_url",
     "og:video",
+    "og:video:url",
     "og:video:secure_url",
     "og:audio",
+    "og:audio:url",
+    "og:audio:secure_url",
+    "twitter:url",
     "twitter:image",
+    "twitter:image:src",
     "twitter:player",
 ];
 

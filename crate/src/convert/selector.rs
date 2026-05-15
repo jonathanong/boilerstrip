@@ -19,7 +19,9 @@ pub fn remove_elements(html: &str, tags: &[&str]) -> String {
 /// Remove all elements matching the given CSS selectors.
 ///
 /// Uses DOM-based removal so serialization differences between the input and
-/// scraper's output don't cause silent no-ops.
+/// scraper's output don't cause silent no-ops.  Each selector drives its own
+/// `select()` traversal so the total work is O(Σ matched_elements) rather than
+/// O(total_elements × selector_count).
 pub fn remove_by_css_selectors(html: &str, selectors: Option<&[String]>) -> String {
     let Some(selectors) = selectors.filter(|s| !s.is_empty()) else {
         return html.to_string();
@@ -31,7 +33,17 @@ pub fn remove_by_css_selectors(html: &str, selectors: Option<&[String]>) -> Stri
     if parsed.is_empty() {
         return html.to_string();
     }
-    crate::util::remove_matching(html, |el| parsed.iter().any(|sel| sel.matches(el)))
+    let mut fragment = Html::parse_fragment(html);
+    let ids: std::collections::HashSet<_> = parsed
+        .iter()
+        .flat_map(|sel| fragment.select(sel).map(|el| el.id()))
+        .collect();
+    for id in ids {
+        if let Some(mut node) = fragment.tree.get_mut(id) {
+            node.detach();
+        }
+    }
+    crate::util::serialize_fragment_body(&fragment)
 }
 
 /// Narrow to a single content root element.
