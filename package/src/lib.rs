@@ -49,10 +49,7 @@ fn do_learn(pages: &[Vec<u8>]) -> Result<boilerstrip::Removals> {
         .map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
-fn do_convert(
-    htmls: &[Vec<u8>],
-    removals: Option<&boilerstrip::Removals>,
-) -> Result<Vec<Vec<u8>>> {
+fn do_convert(htmls: &[Vec<u8>], removals: Option<&boilerstrip::Removals>) -> Result<Vec<Vec<u8>>> {
     htmls
         .iter()
         .map(|bytes| {
