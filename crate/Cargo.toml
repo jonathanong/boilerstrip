@@ -1,0 +1,21 @@
+[package]
+name = "boilerstrip"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Learn site boilerplate selectors from multiple pages and convert HTML to clean Markdown"
+repository = "https://github.com/jonathanong/boilerstrip"
+keywords = ["html", "markdown", "scraping", "rag", "boilerplate"]
+categories = ["text-processing", "web-programming"]
+
+[dependencies]
+scraper = "0.26"
+regex = "1.11"
+html2md = "0.2"
+serde_json = { version = "1.0", features = ["preserve_order"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+pretty_assertions = "1"
+serde_json = "1.0"

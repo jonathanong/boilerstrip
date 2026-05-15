@@ -1,0 +1,10 @@
+{
+  "title": "Mon Article",
+  "lang": "fr",
+  "canonical_url": "https://example.com/mon-article",
+  "meta": {
+    "description": "Un article en français",
+    "og:title": "Mon Article OG"
+  },
+  "content": "Mon Article\n==========\n\nVoici le contenu principal de l'article."
+}

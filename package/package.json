@@ -1,0 +1,40 @@
+{
+  "name": "boilerstrip",
+  "version": "0.1.0",
+  "description": "Learn site boilerplate selectors from a page set and convert HTML to Markdown",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonathanong/boilerstrip.git"
+  },
+  "keywords": [
+    "html",
+    "markdown",
+    "scraping",
+    "rag",
+    "boilerplate"
+  ],
+  "files": ["index.js", "index.d.ts", "*.node"],
+  "napi": {
+    "name": "boilerstrip",
+    "triples": {
+      "defaults": true
+    }
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "prepublishOnly": "napi prepublish -t npm"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2",
+    "@types/node": "^25.8.0",
+    "@vitest/coverage-v8": "^3",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

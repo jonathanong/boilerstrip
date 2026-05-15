@@ -1,0 +1,8 @@
+{
+  "css_selectors_to_remove": [
+    "#header"
+  ],
+  "html_to_remove": [
+    "<aside>\n    <p>Subscribe to our newsletter for weekly updates and exclusive content. Terms apply. Cookie notice: we use cookies to improve your experience. Privacy policy applies to all users. All rights reserved.</p>\n  </aside>"
+  ]
+}

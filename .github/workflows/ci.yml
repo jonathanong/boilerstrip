@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install npm dependencies
+        working-directory: package
+        run: npm ci --ignore-scripts
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build native module
+        working-directory: package
+        run: npm run build
+
+      - name: TypeScript type check
+        working-directory: package
+        run: npx tsc --noEmit
+
+      - name: Run Node tests
+        working-directory: package
+        run: npm test
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Enforce Rust coverage
+        run: |
+          mkdir -p target/llvm-cov
+          cargo llvm-cov -p boilerstrip \
+            --fail-uncovered-lines 0 \
+            --fail-uncovered-functions 0 \
+            --show-missing-lines \
+            --lcov \
+            --output-path target/llvm-cov/lcov.info
+
+      - name: Upload Rust coverage to Codecov
+        if: ${{ env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: target/llvm-cov/lcov.info
+          flags: rust
+          fail_ci_if_error: true

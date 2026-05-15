@@ -1,0 +1,7 @@
+{
+  "css_selectors_to_remove": [
+    "#site-footer",
+    ".site-nav"
+  ],
+  "html_to_remove": []
+}
