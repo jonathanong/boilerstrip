@@ -7,5 +7,7 @@ export interface Removals {
   cssSelectorsToRemove: Array<string>
   htmlToRemove: Array<string>
 }
-export declare function learn(pages: Array<string>): Removals
-export declare function convert(html: string, removals?: Removals | undefined | null): string
+export declare function learn(pages: Array<Buffer | string>): Promise<Removals>
+export declare function learnSync(pages: Array<Buffer | string>): Removals
+export declare function convert(htmls: Array<Buffer | string>, removals?: Removals | undefined | null): Promise<Buffer[]>
+export declare function convertSync(htmls: Array<Buffer | string>, removals?: Removals | undefined | null): Array<Buffer>

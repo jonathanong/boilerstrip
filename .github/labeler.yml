@@ -1,5 +1,3 @@
-max-files-changed: 100
-
 ci:
   - changed-files:
       - any-glob-to-any-file:

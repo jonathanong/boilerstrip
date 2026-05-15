@@ -50,8 +50,14 @@ npm install boilerstrip
 ```js
 import { learn, convert } from 'boilerstrip'
 
-const removals = learn(pages)
-const markdown = convert(html, removals)
+// pages and htmls can be Buffer[] or string[] (or mixed)
+const removals = await learn(pages)               // Promise<Removals>
+const markdowns = await convert(htmls, removals)  // Promise<Buffer[]>
+
+// Synchronous variants
+import { learnSync, convertSync } from 'boilerstrip'
+const removalsSync = learnSync(pages)
+const markdownsSync = convertSync(htmls, removalsSync)
 ```
 
 ## Repository layout

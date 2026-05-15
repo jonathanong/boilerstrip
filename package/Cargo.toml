@@ -8,8 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 boilerstrip = { path = "../crate" }
-napi = { version = "2", features = ["napi4"] }
-napi-derive = "2"
+napi = { version = "3", features = ["napi4"] }
+napi-derive = "3"
 
 [build-dependencies]
 napi-build = "2"
