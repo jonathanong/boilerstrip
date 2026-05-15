@@ -310,7 +310,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { learn, convert } = nativeBinding
+const { learn, learnSync, convert, convertSync } = nativeBinding
 
 module.exports.learn = learn
+module.exports.learnSync = learnSync
 module.exports.convert = convert
+module.exports.convertSync = convertSync
