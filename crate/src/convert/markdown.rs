@@ -55,4 +55,15 @@ mod tests {
         let result = html_to_markdown("   <p>text</p>   ");
         assert_eq!(result, result.trim());
     }
+
+    #[test]
+    fn html_to_markdown_does_not_leak_html_comments() {
+        let result = html_to_markdown("<p>keep</p><!-- hidden comment --><p>also keep</p>");
+        assert!(
+            !result.contains("<!--"),
+            "HTML comments must not appear in Markdown output"
+        );
+        assert!(result.contains("keep"));
+        assert!(result.contains("also keep"));
+    }
 }

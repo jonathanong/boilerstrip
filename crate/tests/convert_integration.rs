@@ -14,7 +14,7 @@ fn basic_article_matches_expected_markdown() {
     let expected_md =
         std::fs::read_to_string(root.join("convert/basic_article.expected.md")).unwrap();
 
-    let result = convert(&html, &ConvertOptions::default()).unwrap();
+    let result = convert(&html, &ConvertOptions::default());
     assert_eq!(result.title, Some("Getting Started".to_string()));
     assert_eq!(result.content.trim(), expected_md.trim());
 }
@@ -28,7 +28,7 @@ fn with_meta_matches_expected_json() {
     )
     .unwrap();
 
-    let result = convert(&html, &ConvertOptions::default()).unwrap();
+    let result = convert(&html, &ConvertOptions::default());
     assert_eq!(result.title, expected["title"].as_str().map(str::to_string));
     assert_eq!(result.lang, expected["lang"].as_str().map(str::to_string));
     assert_eq!(
@@ -49,7 +49,7 @@ fn with_meta_matches_expected_json() {
 fn tables_and_lists_conversion_succeeds() {
     let root = fixtures_root();
     let html = std::fs::read_to_string(root.join("convert/tables_and_lists.html")).unwrap();
-    let result = convert(&html, &ConvertOptions::default()).unwrap();
+    let result = convert(&html, &ConvertOptions::default());
     assert!(result.content.contains("Comparison"));
     assert!(result.content.contains("Install the package") || result.content.contains("1."));
 }

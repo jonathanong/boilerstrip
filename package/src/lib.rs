@@ -1,8 +1,6 @@
 #![deny(clippy::all)]
 
-use boilerstrip::{ConvertOptions, LearnOptions};
-use napi::bindgen_prelude::{AsyncTask, Buffer, Either};
-use napi::{Env, Result, Task};
+use boilerstrip::{ConvertOptions as RustConvertOptions, LearnOptions as RustLearnOptions};
 use napi_derive::napi;
 
 #[napi(object)]
@@ -29,108 +27,80 @@ impl From<Removals> for boilerstrip::Removals {
     }
 }
 
-fn to_bytes(input: Either<Buffer, String>) -> Vec<u8> {
-    match input {
-        Either::A(buf) => buf.to_vec(),
-        Either::B(s) => s.into_bytes(),
+#[napi(object)]
+pub struct LearnOptions {
+    /// Text patterns (case-insensitive) that suggest boilerplate content.
+    /// Pass an empty array to disable pattern matching.
+    /// Omit (null/undefined) to use the built-in defaults.
+    pub boilerplate_patterns: Option<Vec<String>>,
+    /// Maximum times a selector can match per page before it is considered too broad.
+    /// Defaults to `20`.
+    pub max_selector_matches_per_page: Option<u32>,
+    /// Minimum average stable-match ratio across all pages. Defaults to `0.6`.
+    pub min_selector_average_stable_ratio: Option<f64>,
+    /// Minimum per-page stable-match ratio. Defaults to `0.35`.
+    pub min_selector_per_page_stable_ratio: Option<f64>,
+    /// Minimum text length for a snippet to qualify as boilerplate. Defaults to `40`.
+    pub min_snippet_text_length: Option<u32>,
+    /// Maximum text length for a snippet to qualify as boilerplate. Defaults to `240`.
+    pub max_snippet_text_length: Option<u32>,
+}
+
+impl From<LearnOptions> for RustLearnOptions {
+    fn from(o: LearnOptions) -> Self {
+        Self {
+            boilerplate_patterns: o.boilerplate_patterns,
+            max_selector_matches_per_page: o.max_selector_matches_per_page.map(|v| v as usize),
+            min_selector_average_stable_ratio: o.min_selector_average_stable_ratio,
+            min_selector_per_page_stable_ratio: o.min_selector_per_page_stable_ratio,
+            min_snippet_text_length: o.min_snippet_text_length.map(|v| v as usize),
+            max_snippet_text_length: o.max_snippet_text_length.map(|v| v as usize),
+        }
     }
 }
 
-fn bytes_to_str(bytes: &[u8]) -> Result<&str> {
-    std::str::from_utf8(bytes).map_err(|e| napi::Error::from_reason(e.to_string()))
+#[napi(object)]
+pub struct ConvertOptions {
+    /// Boilerplate removals learned from a set of pages; applied before conversion.
+    pub removals: Option<Removals>,
+    /// CSS selectors whose matching elements are removed before conversion.
+    pub css_selectors_to_remove: Option<Vec<String>>,
+    /// CSS selectors that identify the main content root (first match wins).
+    pub content_selectors: Option<Vec<String>>,
+    /// Link visible-text patterns whose matching `<a>`/`<button>` elements are removed.
+    pub link_text_content_to_remove: Option<Vec<String>>,
+    /// Link href prefixes whose matching elements are removed (e.g. `"javascript:"`).
+    pub link_hrefs_to_remove: Option<Vec<String>>,
+    /// `<link rel="...">` tokens to exclude from the extracted `link` map.
+    pub link_rel_tokens_to_remove: Option<Vec<String>>,
+    /// When `true`, use text-density scoring to locate the main content element.
+    pub use_text_density_filter: Option<bool>,
 }
 
-fn do_learn(pages: &[Vec<u8>]) -> Result<boilerstrip::Removals> {
-    let strings: Result<Vec<String>> = pages
-        .iter()
-        .map(|b| bytes_to_str(b).map(str::to_owned))
-        .collect();
-    boilerstrip::learn(&strings?, &LearnOptions::default())
+impl From<ConvertOptions> for RustConvertOptions {
+    fn from(o: ConvertOptions) -> Self {
+        Self {
+            removals: o.removals.map(boilerstrip::Removals::from),
+            css_selectors_to_remove: o.css_selectors_to_remove,
+            content_selectors: o.content_selectors,
+            link_text_content_to_remove: o.link_text_content_to_remove,
+            link_hrefs_to_remove: o.link_hrefs_to_remove,
+            link_rel_tokens_to_remove: o.link_rel_tokens_to_remove,
+            use_text_density_filter: o.use_text_density_filter,
+        }
+    }
+}
+
+#[napi]
+pub fn learn(pages: Vec<String>, options: Option<LearnOptions>) -> napi::Result<Removals> {
+    let rust_options = options.map(RustLearnOptions::from).unwrap_or_default();
+    boilerstrip::learn(&pages, &rust_options)
+        .map(Removals::from)
         .map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 
-fn do_convert(htmls: &[Vec<u8>], removals: Option<&boilerstrip::Removals>) -> Result<Vec<Vec<u8>>> {
-    let options = ConvertOptions {
-        removals: removals.cloned(),
-        ..Default::default()
-    };
-    htmls
-        .iter()
-        .map(|bytes| {
-            let html = bytes_to_str(bytes)?;
-            boilerstrip::convert(html, &options)
-                .map(|r| r.content.into_bytes())
-                .map_err(|e| napi::Error::from_reason(e.to_string()))
-        })
-        .collect()
-}
-
-// ── Learn ─────────────────────────────────────────────────────────────────────
-
-pub struct LearnTask(Vec<Vec<u8>>);
-
-impl Task for LearnTask {
-    type Output = boilerstrip::Removals;
-    type JsValue = Removals;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        do_learn(&self.0)
-    }
-
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(Removals::from(output))
-    }
-}
-
-#[napi(ts_return_type = "Promise<Removals>")]
-pub fn learn(pages: Vec<Either<Buffer, String>>) -> AsyncTask<LearnTask> {
-    AsyncTask::new(LearnTask(pages.into_iter().map(to_bytes).collect()))
-}
-
 #[napi]
-pub fn learn_sync(pages: Vec<Either<Buffer, String>>) -> Result<Removals> {
-    do_learn(&pages.into_iter().map(to_bytes).collect::<Vec<_>>()).map(Removals::from)
-}
-
-// ── Convert ───────────────────────────────────────────────────────────────────
-
-pub struct ConvertTask {
-    htmls: Vec<Vec<u8>>,
-    removals: Option<boilerstrip::Removals>,
-}
-
-impl Task for ConvertTask {
-    type Output = Vec<Vec<u8>>;
-    type JsValue = Vec<Buffer>;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        do_convert(&self.htmls, self.removals.as_ref())
-    }
-
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(output.into_iter().map(Buffer::from).collect())
-    }
-}
-
-#[napi(ts_return_type = "Promise<Buffer[]>")]
-pub fn convert(
-    htmls: Vec<Either<Buffer, String>>,
-    removals: Option<Removals>,
-) -> AsyncTask<ConvertTask> {
-    AsyncTask::new(ConvertTask {
-        htmls: htmls.into_iter().map(to_bytes).collect(),
-        removals: removals.map(boilerstrip::Removals::from),
-    })
-}
-
-#[napi]
-pub fn convert_sync(
-    htmls: Vec<Either<Buffer, String>>,
-    removals: Option<Removals>,
-) -> Result<Vec<Buffer>> {
-    do_convert(
-        &htmls.into_iter().map(to_bytes).collect::<Vec<_>>(),
-        removals.map(boilerstrip::Removals::from).as_ref(),
-    )
-    .map(|vecs| vecs.into_iter().map(Buffer::from).collect())
+pub fn convert(html: String, options: Option<ConvertOptions>) -> String {
+    let rust_options = options.map(RustConvertOptions::from).unwrap_or_default();
+    boilerstrip::convert(&html, &rust_options).content
 }

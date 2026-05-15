@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::constants::{
-    MAX_SELECTOR_MATCHES_PER_PAGE, MIN_SELECTOR_AVERAGE_STABLE_RATIO,
-    MIN_SELECTOR_PER_PAGE_STABLE_RATIO,
+    MAX_SELECTOR_MATCHES_PER_PAGE, MAX_SNIPPET_TEXT_LENGTH, MIN_SELECTOR_AVERAGE_STABLE_RATIO,
+    MIN_SELECTOR_PER_PAGE_STABLE_RATIO, MIN_SNIPPET_TEXT_LENGTH,
 };
 use super::selectors::selector_priority;
 
@@ -18,6 +18,57 @@ pub struct LearnOptions {
     /// - `Some(patterns)`: replace the defaults entirely.
     /// - `Some(vec![])`: disable pattern matching.
     pub boilerplate_patterns: Option<Vec<String>>,
+
+    /// Override the maximum times a selector can match per page before it is
+    /// considered too broad. Defaults to `20`.
+    pub max_selector_matches_per_page: Option<usize>,
+
+    /// Override the minimum average stable-match ratio across all pages.
+    /// Defaults to `0.6`.
+    pub min_selector_average_stable_ratio: Option<f64>,
+
+    /// Override the minimum per-page stable-match ratio.
+    /// Defaults to `0.35`.
+    pub min_selector_per_page_stable_ratio: Option<f64>,
+
+    /// Override the minimum text length for a snippet to qualify as boilerplate.
+    /// Defaults to `40`.
+    pub min_snippet_text_length: Option<usize>,
+
+    /// Override the maximum text length for a snippet to qualify as boilerplate.
+    /// Defaults to `240`.
+    pub max_snippet_text_length: Option<usize>,
+}
+
+/// Resolved configuration derived from [`LearnOptions`] and module-level defaults.
+pub(super) struct LearnConfig {
+    pub max_selector_matches_per_page: usize,
+    pub min_selector_average_stable_ratio: f64,
+    pub min_selector_per_page_stable_ratio: f64,
+    pub min_snippet_text_length: usize,
+    pub max_snippet_text_length: usize,
+}
+
+impl LearnConfig {
+    pub fn from_options(options: &LearnOptions) -> Self {
+        Self {
+            max_selector_matches_per_page: options
+                .max_selector_matches_per_page
+                .unwrap_or(MAX_SELECTOR_MATCHES_PER_PAGE),
+            min_selector_average_stable_ratio: options
+                .min_selector_average_stable_ratio
+                .unwrap_or(MIN_SELECTOR_AVERAGE_STABLE_RATIO),
+            min_selector_per_page_stable_ratio: options
+                .min_selector_per_page_stable_ratio
+                .unwrap_or(MIN_SELECTOR_PER_PAGE_STABLE_RATIO),
+            min_snippet_text_length: options
+                .min_snippet_text_length
+                .unwrap_or(MIN_SNIPPET_TEXT_LENGTH),
+            max_snippet_text_length: options
+                .max_snippet_text_length
+                .unwrap_or(MAX_SNIPPET_TEXT_LENGTH),
+        }
+    }
 }
 
 /// Boilerplate selectors and snippets discovered from a set of HTML pages.
@@ -35,10 +86,6 @@ pub enum LearnError {
     #[error("learn requires at least 2 HTML pages, got {0}")]
     TooFewPages(usize),
 }
-
-/// Error returned by [`apply_removals`][super::apply_removals].
-#[derive(Debug, Error)]
-pub enum ApplyError {}
 
 // ── Internal scoring types ───────────────────────────────────────────────────
 
@@ -65,7 +112,7 @@ impl SelectorStats {
             .or_insert(0) += 1;
     }
 
-    pub fn score(&self, min_shared_pages: usize) -> Option<u64> {
+    pub fn score(&self, min_shared_pages: usize, config: &LearnConfig) -> Option<u64> {
         if self.page_total_matches.len() < min_shared_pages {
             return None;
         }
@@ -73,7 +120,7 @@ impl SelectorStats {
         if self
             .page_total_matches
             .values()
-            .any(|count| *count > MAX_SELECTOR_MATCHES_PER_PAGE)
+            .any(|count| *count > config.max_selector_matches_per_page)
         {
             return None;
         }
@@ -102,8 +149,8 @@ impl SelectorStats {
         }
 
         let average_ratio = ratio_sum / (self.page_total_matches.len() as f64);
-        if average_ratio < MIN_SELECTOR_AVERAGE_STABLE_RATIO
-            || min_ratio < MIN_SELECTOR_PER_PAGE_STABLE_RATIO
+        if average_ratio < config.min_selector_average_stable_ratio
+            || min_ratio < config.min_selector_per_page_stable_ratio
         {
             return None;
         }
@@ -186,32 +233,36 @@ pub(super) struct PathNodeSample {
 mod tests {
     use super::*;
 
+    fn default_config() -> LearnConfig {
+        LearnConfig::from_options(&LearnOptions::default())
+    }
+
     #[test]
     fn selector_stats_scores_and_rejects_unstable_inputs() {
+        let cfg = default_config();
         let mut stats = SelectorStats::new();
-        assert!(stats.score(2).is_none());
+        assert!(stats.score(2, &cfg).is_none());
         stats.record(0, "same");
         stats.record(1, "same");
-        assert!(stats.score(2).is_some());
+        assert!(stats.score(2, &cfg).is_some());
 
         let mut too_many = SelectorStats::new();
         for _ in 0..21 {
             too_many.record(0, "same");
         }
         too_many.record(1, "same");
-        assert!(too_many.score(2).is_none());
+        assert!(too_many.score(2, &cfg).is_none());
     }
 
     #[test]
     fn selector_stats_rejects_low_average_ratio() {
+        let cfg = default_config();
         let mut stats = SelectorStats::new();
-        // page 0: 10 total matches, 1 stable (10% ratio, below MIN_SELECTOR_PER_PAGE_STABLE_RATIO)
         for i in 0..10 {
             stats.record(0, &format!("unique-{i}"));
         }
         stats.record(1, "same");
-        // Not enough stable ratio on page 0
-        assert!(stats.score(2).is_none());
+        assert!(stats.score(2, &cfg).is_none());
     }
 
     #[test]
@@ -219,8 +270,8 @@ mod tests {
         // 3 pages: pages 1 and 2 are perfectly stable (ratio=1.0), page 0 has
         // ratio=0.1 (1 shared match out of 10 total).  Average ≈ 0.7 ≥ 0.6
         // (first condition is false) but min=0.1 < 0.35 (second condition is
-        // true) → triggers the `|| min_ratio < MIN_SELECTOR_PER_PAGE_STABLE_RATIO`
-        // branch at types.rs:108.
+        // true) → triggers the `|| min_ratio < min_selector_per_page_stable_ratio` branch.
+        let cfg = default_config();
         let mut stats = SelectorStats::new();
         stats.record(0, "shared");
         for i in 0..9 {
@@ -228,7 +279,24 @@ mod tests {
         }
         stats.record(1, "shared");
         stats.record(2, "shared");
-        assert!(stats.score(2).is_none());
+        assert!(stats.score(2, &cfg).is_none());
+    }
+
+    #[test]
+    fn learn_config_overrides_defaults() {
+        // A selector that matches 25 times (> default 20) is accepted when the
+        // override raises the cap.
+        let options = LearnOptions {
+            max_selector_matches_per_page: Some(30),
+            ..Default::default()
+        };
+        let cfg = LearnConfig::from_options(&options);
+        let mut stats = SelectorStats::new();
+        for _ in 0..25 {
+            stats.record(0, "same");
+        }
+        stats.record(1, "same");
+        assert!(stats.score(2, &cfg).is_some());
     }
 
     #[test]

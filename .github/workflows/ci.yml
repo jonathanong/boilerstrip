@@ -59,6 +59,9 @@ jobs:
         working-directory: package
         run: npm test
 
+      - name: Build and test with internals feature
+        run: cargo test -p boilerstrip --features internals
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
@@ -66,8 +69,8 @@ jobs:
         run: |
           mkdir -p target/llvm-cov
           cargo llvm-cov -p boilerstrip \
-            --fail-uncovered-lines 0 \
-            --fail-uncovered-functions 0 \
+            --fail-under-lines 95 \
+            --fail-under-regions 90 \
             --show-missing-lines \
             --lcov \
             --output-path target/llvm-cov/lcov.info

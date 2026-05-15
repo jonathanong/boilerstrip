@@ -1,5 +1,4 @@
 use serde_json::{Map, Value};
-use thiserror::Error;
 
 use crate::learn::types::Removals;
 
@@ -39,7 +38,3 @@ pub struct ConvertResult {
     /// Language code from `<html lang="...">`.
     pub lang: Option<String>,
 }
-
-/// Error returned by [`convert`][super::convert].
-#[derive(Debug, Error)]
-pub enum ConvertError {}

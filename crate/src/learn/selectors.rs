@@ -48,12 +48,12 @@ pub(super) fn is_stable_selector_token(value: &str) -> bool {
     if value.len() < MIN_SELECTOR_TOKEN_LENGTH || value.len() > MAX_SELECTOR_TOKEN_LENGTH {
         return false;
     }
-    if !value.chars().any(|ch| ch.is_ascii_alphabetic()) {
+    if !value.chars().any(|ch| ch.is_alphabetic()) {
         return false;
     }
     if !value
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+        .all(|ch| ch.is_alphanumeric() || ch == '-' || ch == '_')
     {
         return false;
     }
@@ -148,7 +148,8 @@ mod tests {
         assert!(!is_stable_selector_token("item-1234")); // >= 4 digits
         assert!(!is_stable_selector_token("hash-deadbeef")); // hex segment
         assert!(!is_stable_selector_token(&"a".repeat(65))); // too long
-        assert!(is_stable_selector_token("site-nav")); // valid
+        assert!(is_stable_selector_token("site-nav")); // valid ASCII
+        assert!(is_stable_selector_token("año-principal")); // valid Unicode
     }
 
     #[test]

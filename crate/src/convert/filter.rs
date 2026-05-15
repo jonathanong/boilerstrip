@@ -10,6 +10,7 @@ static SELECTOR_MAIN_ARTICLE_SECTION_DIV: LazyLock<Vec<Selector>> = LazyLock::ne
 
 static SELECTOR_A: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a").expect("BUG: invalid SELECTOR_A"));
+
 static SELECTOR_A_BUTTON: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a, button").expect("BUG: invalid SELECTOR_A_BUTTON"));
 
@@ -19,7 +20,10 @@ const TEXT_DENSITY_LINK_PENALTY: i32 = 20;
 /// Find the element with the highest text density score across `<main>`,
 /// `<article>`, `<section>`, and `<div>` elements.
 ///
-/// Score = total text length − link text length − (link count × 20)
+/// Score = total text length − link text length − (link count × 20).
+///
+/// Note: candidates include overlapping ancestors and descendants; outer
+/// wrappers tend to win when they have the most total text.
 pub fn apply_text_density_filter(document: &Html) -> Option<ElementRef<'_>> {
     SELECTOR_MAIN_ARTICLE_SECTION_DIV
         .iter()
@@ -55,36 +59,34 @@ fn calculate_text_density_score(element: &ElementRef) -> i32 {
 
 /// Remove `<a>` and `<button>` elements that are empty, anchor-only (`#`),
 /// or match the caller's text/href blacklists.
+///
+/// Uses DOM-based removal so serialization differences between the input and
+/// scraper's output don't cause silent no-ops.
 pub fn filter_links(
     html: &str,
     link_text_content_to_remove: Option<&[String]>,
     link_hrefs_to_remove: Option<&[String]>,
 ) -> String {
-    let document = Html::parse_document(html);
-    let mut to_remove = Vec::new();
-
-    for element in document.select(&SELECTOR_A_BUTTON) {
-        let text: String = element.text().collect();
-        let href = element.value().attr("href");
-
-        let should_remove = text.trim().is_empty()
-            || href.is_none()
-            || href.is_some_and(|h| h.starts_with('#'))
-            || should_remove_by_text(&text, link_text_content_to_remove)
-            || should_remove_by_href(href, link_hrefs_to_remove);
-
-        if should_remove {
-            to_remove.push(element.html());
+    let mut fragment = Html::parse_fragment(html);
+    let ids: Vec<_> = fragment
+        .select(&SELECTOR_A_BUTTON)
+        .filter(|el| {
+            let text: String = el.text().collect();
+            let href = el.value().attr("href");
+            text.trim().is_empty()
+                || href.is_none()
+                || href.is_some_and(|h| h.starts_with('#'))
+                || should_remove_by_text(&text, link_text_content_to_remove)
+                || should_remove_by_href(href, link_hrefs_to_remove)
+        })
+        .map(|el| el.id())
+        .collect();
+    for id in ids {
+        if let Some(mut node) = fragment.tree.get_mut(id) {
+            node.detach();
         }
     }
-
-    to_remove.sort_by_key(|s| std::cmp::Reverse(s.len()));
-
-    let mut result = html.to_string();
-    for snippet in to_remove {
-        result = result.replacen(&snippet, "", 1);
-    }
-    result
+    crate::util::serialize_fragment_body(&fragment)
 }
 
 fn should_remove_by_text(text: &str, patterns: Option<&[String]>) -> bool {

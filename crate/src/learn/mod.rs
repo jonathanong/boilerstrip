@@ -32,7 +32,7 @@ use scraper::Html;
 use std::collections::{HashMap, HashSet};
 
 pub use apply::apply_removals;
-pub use types::{ApplyError, LearnError, LearnOptions, Removals};
+pub use types::{LearnError, LearnOptions, Removals};
 
 use constants::SELECTOR_ALL_ELEMENTS;
 use fingerprint::{normalize_whitespace, normalized_text_fingerprint};
@@ -44,7 +44,7 @@ use snippets::{
     collect_breadth_first_snippet_candidates, should_skip_element,
     snippet_contains_selected_selector,
 };
-use types::{ScoredSelector, SelectorStats};
+use types::{LearnConfig, ScoredSelector, SelectorStats};
 
 /// Analyze a set of HTML pages from the same site and identify boilerplate elements.
 ///
@@ -60,6 +60,7 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
         return Err(LearnError::TooFewPages(pages.len()));
     }
 
+    let config = LearnConfig::from_options(options);
     let min_shared_pages = minimum_shared_page_count(pages.len());
     let mut selector_stats: HashMap<String, SelectorStats> = HashMap::new();
 
@@ -88,12 +89,16 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
     }
 
     let boilerplate_patterns = resolve_boilerplate_patterns(options);
-    let snippet_candidates =
-        collect_breadth_first_snippet_candidates(pages, min_shared_pages, &boilerplate_patterns);
+    let snippet_candidates = collect_breadth_first_snippet_candidates(
+        pages,
+        min_shared_pages,
+        &boilerplate_patterns,
+        &config,
+    );
 
     let mut scored_css_selectors = Vec::new();
     for (selector, stats) in &selector_stats {
-        if let Some(score) = stats.score(min_shared_pages) {
+        if let Some(score) = stats.score(min_shared_pages, &config) {
             scored_css_selectors.push(ScoredSelector {
                 selector: selector.clone(),
                 score,
@@ -167,6 +172,7 @@ fn resolve_boilerplate_patterns(options: &LearnOptions) -> Vec<String> {
 }
 
 fn minimum_shared_page_count(page_count: usize) -> usize {
+    // ≥⅔ of pages, rounded up, minimum 2
     let two_thirds = (page_count.saturating_mul(2).saturating_add(2)) / 3;
     two_thirds.max(2)
 }
@@ -216,6 +222,7 @@ mod tests {
         ];
         let options = LearnOptions {
             boilerplate_patterns: Some(vec!["buy now".to_string()]),
+            ..Default::default()
         };
         let removals = learn(&pages, &options).unwrap();
         assert!(removals
@@ -234,6 +241,7 @@ mod tests {
         ];
         let options = LearnOptions {
             boilerplate_patterns: Some(vec![]),
+            ..Default::default()
         };
         let removals = learn(&pages, &options).unwrap();
         assert!(removals.html_to_remove.is_empty());
@@ -271,7 +279,6 @@ mod tests {
 
     #[test]
     fn learn_skips_script_and_style_elements() {
-        // script/style trigger should_skip_element → continue (line 71)
         let pages = vec![
             "<html><head><script>var x=1;</script><style>.a{}</style></head><body><nav class=\"shared-nav\">Menu</nav></body></html>".to_string(),
             "<html><head><script>var x=2;</script><style>.b{}</style></head><body><nav class=\"shared-nav\">Menu</nav></body></html>".to_string(),
@@ -285,7 +292,6 @@ mod tests {
 
     #[test]
     fn learn_skips_elements_with_empty_fingerprint() {
-        // "..." → all punctuation → empty fingerprint after normalization (line 79)
         let pages = vec![
             "<html><body><p>...</p><nav class=\"shared-nav\">Menu</nav></body></html>".to_string(),
             "<html><body><p>---</p><nav class=\"shared-nav\">Menu</nav></body></html>".to_string(),
@@ -299,7 +305,6 @@ mod tests {
 
     #[test]
     fn learn_handles_selectors_with_no_score() {
-        // A class that appears on only one page scores None (line 104 false branch)
         let pages = vec![
             "<html><body><div class=\"only-page-one\">Content unique to page one</div></body></html>".to_string(),
             "<html><body><div>Content unique to page two</div></body></html>".to_string(),

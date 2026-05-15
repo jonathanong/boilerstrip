@@ -41,7 +41,26 @@ pub fn extract_title(document: &Html) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// URL-valued meta properties/names whose content must pass `is_safe_url`.
+const URL_META_KEYS: &[&str] = &[
+    "og:url",
+    "og:image",
+    "og:image:url",
+    "og:image:secure_url",
+    "og:video",
+    "og:video:url",
+    "og:video:secure_url",
+    "og:audio",
+    "og:audio:url",
+    "og:audio:secure_url",
+    "twitter:url",
+    "twitter:image",
+    "twitter:image:src",
+    "twitter:player",
+];
+
 /// Collect `<meta name/property>` into a JSON map. First occurrence wins.
+/// URL-typed meta values (e.g. `og:url`) are filtered through `is_safe_url`.
 pub fn extract_meta_tags(document: &Html) -> Map<String, Value> {
     let mut meta = Map::new();
     for element in document.select(&SELECTOR_META) {
@@ -51,6 +70,10 @@ pub fn extract_meta_tags(document: &Html) -> Map<String, Value> {
             .or_else(|| element.value().attr("property"));
         let content = element.value().attr("content");
         if let (Some(k), Some(c)) = (key, content) {
+            let is_url_key = URL_META_KEYS.iter().any(|uk| uk.eq_ignore_ascii_case(k));
+            if is_url_key && !is_safe_url(c) {
+                continue;
+            }
             meta.entry(k.to_string())
                 .or_insert_with(|| Value::String(c.to_string()));
         }
@@ -80,6 +103,10 @@ pub fn extract_link_tags(
             continue;
         };
         let alternate_link_type = normalize_link_type(element.value().attr("type"));
+
+        if !is_safe_url(href) {
+            continue;
+        }
 
         for token in rel.split_whitespace() {
             let normalized_token = token.to_lowercase();
@@ -149,7 +176,7 @@ pub fn extract_lang(document: &Html) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
-fn is_safe_url(url: &str) -> bool {
+pub(crate) fn is_safe_url(url: &str) -> bool {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return false;
@@ -390,6 +417,68 @@ mod tests {
                 .and_then(|v| v.as_array())
                 .map(Vec::len),
             Some(1)
+        );
+    }
+
+    #[test]
+    fn extract_meta_tags_filters_dangerous_url_meta() {
+        let doc = Html::parse_document(
+            r#"<html><head>
+              <meta property="og:url" content="javascript:alert(1)">
+              <meta property="og:title" content="Safe title">
+              <meta property="og:image" content="data:image/png,bad">
+              <meta property="og:image" content="https://example.com/img.png">
+            </head></html>"#,
+        );
+        let meta = extract_meta_tags(&doc);
+        assert!(
+            !meta.contains_key("og:url"),
+            "dangerous og:url should be filtered"
+        );
+        assert!(
+            meta.contains_key("og:title"),
+            "non-URL meta should pass through"
+        );
+        assert_eq!(
+            meta.get("og:image").and_then(|v| v.as_str()),
+            Some("https://example.com/img.png"),
+            "dangerous data: image filtered, safe https: image accepted"
+        );
+    }
+
+    #[test]
+    fn extract_link_tags_filters_dangerous_href() {
+        let doc = Html::parse_document(
+            r#"<html><head>
+              <link rel="canonical" href="javascript:void(0)">
+              <link rel="alternate" href="javascript:void(0)">
+            </head></html>"#,
+        );
+        let links = extract_link_tags(&doc, None);
+        assert!(
+            !links.contains_key("canonical"),
+            "dangerous canonical href filtered"
+        );
+        assert!(
+            !links.contains_key("alternate"),
+            "dangerous alternate href filtered"
+        );
+    }
+
+    #[test]
+    fn base_href_does_not_affect_canonical_extraction() {
+        // <base href> is not resolved — canonical is read verbatim.
+        // This is the documented behaviour; callers must resolve if needed.
+        let doc = Html::parse_document(
+            r#"<html><head>
+              <base href="https://cdn.example.com/">
+              <link rel="canonical" href="/page">
+            </head></html>"#,
+        );
+        assert_eq!(
+            extract_canonical_url(&doc),
+            Some("/page".to_string()),
+            "canonical is the verbatim href, not base-resolved"
         );
     }
 }

@@ -34,8 +34,7 @@ fn full_pipeline_strips_header_and_footer_from_new_page() {
             removals: Some(removals),
             ..Default::default()
         },
-    )
-    .unwrap();
+    );
 
     // Content present, boilerplate absent
     assert!(result.content.contains("AI Advances"));

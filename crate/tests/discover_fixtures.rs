@@ -29,7 +29,7 @@ fn discover_site_b_removals() {
 fn discover_convert_basic_article() {
     let root = fixtures_root();
     let html = std::fs::read_to_string(root.join("convert/basic_article.html")).unwrap();
-    let result = boilerstrip::convert(&html, &boilerstrip::ConvertOptions::default()).unwrap();
+    let result = boilerstrip::convert(&html, &boilerstrip::ConvertOptions::default());
     println!("--- TITLE ---\n{:?}", result.title);
     println!("--- CONTENT ---\n{}", result.content);
 }
@@ -38,7 +38,7 @@ fn discover_convert_basic_article() {
 fn discover_convert_with_meta() {
     let root = fixtures_root();
     let html = std::fs::read_to_string(root.join("convert/with_meta.html")).unwrap();
-    let result = boilerstrip::convert(&html, &boilerstrip::ConvertOptions::default()).unwrap();
+    let result = boilerstrip::convert(&html, &boilerstrip::ConvertOptions::default());
     println!("--- TITLE ---\n{:?}", result.title);
     println!("--- LANG ---\n{:?}", result.lang);
     println!("--- CANONICAL ---\n{:?}", result.canonical_url);
