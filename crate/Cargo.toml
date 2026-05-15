@@ -8,6 +8,10 @@ repository = "https://github.com/jonathanong/boilerstrip"
 keywords = ["html", "markdown", "scraping", "rag", "boilerplate"]
 categories = ["text-processing", "web-programming"]
 
+[features]
+default = []
+internals = []
+
 [dependencies]
 scraper = "0.26"
 regex = "1.11"

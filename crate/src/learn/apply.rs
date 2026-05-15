@@ -1,9 +1,7 @@
 use regex::Regex;
-use scraper::{Html, Selector};
 use std::sync::LazyLock;
 
-use super::types::{ApplyError, Removals};
-use crate::util::serialize_fragment_body;
+use super::types::Removals;
 
 static WHITESPACE_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\s+").expect("BUG: invalid whitespace regex"));
@@ -14,9 +12,9 @@ static CONTENT_TAG_CLOSE_RE: LazyLock<Regex> =
 
 /// Apply previously learned boilerplate removals to an HTML string.
 ///
-/// Removes elements matching CSS selectors first, then strips verbatim HTML
-/// snippets using flexible whitespace-tolerant regex matching.
-pub fn apply_removals(html: &str, removals: &Removals) -> Result<String, ApplyError> {
+/// Removes elements matching CSS selectors first (DOM-based), then strips
+/// verbatim HTML snippets using flexible whitespace-tolerant regex matching.
+pub fn apply_removals(html: &str, removals: &Removals) -> String {
     let mut cleaned = html.to_string();
 
     if !removals.css_selectors_to_remove.is_empty() {
@@ -26,26 +24,15 @@ pub fn apply_removals(html: &str, removals: &Removals) -> Result<String, ApplyEr
         cleaned = apply_html_snippet_removals(&cleaned, &removals.html_to_remove);
     }
 
-    Ok(cleaned.trim().to_string())
+    cleaned.trim().to_string()
 }
 
 fn apply_css_selector_removals(html: &str, selectors: &[String]) -> String {
-    let mut fragment = Html::parse_fragment(html);
-
-    for selector_str in selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            let ids_to_remove: Vec<_> = fragment.select(&selector).map(|el| el.id()).collect();
-            for id in ids_to_remove {
-                let mut node = fragment
-                    .tree
-                    .get_mut(id)
-                    .expect("BUG: selected element id should exist in fragment tree");
-                node.detach();
-            }
-        }
-    }
-
-    serialize_fragment_body(&fragment)
+    let parsed: Vec<scraper::Selector> = selectors
+        .iter()
+        .filter_map(|s| scraper::Selector::parse(s).ok())
+        .collect();
+    crate::util::remove_matching(html, |el| parsed.iter().any(|sel| sel.matches(el)))
 }
 
 fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
@@ -60,10 +47,14 @@ fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
         .map(|s| (normalize_whitespace(s), s))
         .collect();
 
+    let mut normalized_cleaned = normalize_whitespace(&cleaned);
     for (normalized_snippet, original_snippet) in &normalized_snippets {
-        let normalized_cleaned = normalize_whitespace(&cleaned);
         if normalized_cleaned.contains(normalized_snippet.as_str()) {
-            cleaned = remove_html_snippet(&cleaned, original_snippet);
+            let next = remove_html_snippet(&cleaned, original_snippet);
+            if next != cleaned {
+                normalized_cleaned = normalize_whitespace(&next);
+                cleaned = next;
+            }
         }
     }
 
@@ -109,7 +100,7 @@ mod tests {
     #[test]
     fn apply_removals_with_empty_removals_returns_trimmed_html() {
         let removals = Removals::default();
-        let result = apply_removals("  <p>hello</p>  ", &removals).unwrap();
+        let result = apply_removals("  <p>hello</p>  ", &removals);
         assert_eq!(result, "<p>hello</p>");
     }
 
@@ -120,7 +111,7 @@ mod tests {
             html_to_remove: vec![],
         };
         let html = "<nav>Menu</nav><main>Content</main>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert!(!result.contains("<nav>"));
         assert!(result.contains("Content"));
     }
@@ -132,7 +123,7 @@ mod tests {
             html_to_remove: vec!["<p>Footer text here</p>".to_string()],
         };
         let html = "<div><p>Content</p></div><p>Footer  text  here</p>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert!(!result.contains("Footer"));
         assert!(result.contains("Content"));
     }
@@ -144,30 +135,28 @@ mod tests {
             html_to_remove: vec!["   ".to_string()],
         };
         let html = "<p>Keep</p>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert_eq!(result, "<p>Keep</p>");
     }
 
     #[test]
     fn apply_removals_skips_invalid_css_selector() {
         let removals = Removals {
-            // "[" is an unclosed attribute selector — definitely invalid
             css_selectors_to_remove: vec!["[".to_string()],
             html_to_remove: vec![],
         };
-        let result = apply_removals("<p>Keep</p>", &removals).unwrap();
+        let result = apply_removals("<p>Keep</p>", &removals);
         assert_eq!(result, "<p>Keep</p>");
     }
 
     #[test]
     fn apply_removals_removes_multiple_css_selectors() {
-        // Exercises the detach loop with 2 matching elements
         let removals = Removals {
             css_selectors_to_remove: vec!["nav".to_string()],
             html_to_remove: vec![],
         };
         let html = "<nav>Nav One</nav><main>Content</main><nav>Nav Two</nav>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert!(!result.contains("Nav One"));
         assert!(!result.contains("Nav Two"));
         assert!(result.contains("Content"));
@@ -175,16 +164,12 @@ mod tests {
 
     #[test]
     fn apply_removals_with_same_length_snippets_uses_lexical_sort() {
-        // Two snippets of equal length: exercises the then_with closure in sort_by
         let removals = Removals {
             css_selectors_to_remove: vec![],
-            html_to_remove: vec![
-                "<p>aaaa</p>".to_string(), // same length as below
-                "<p>bbbb</p>".to_string(),
-            ],
+            html_to_remove: vec!["<p>aaaa</p>".to_string(), "<p>bbbb</p>".to_string()],
         };
         let html = "<p>aaaa</p><p>bbbb</p><p>Keep</p>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert!(!result.contains("aaaa"));
         assert!(!result.contains("bbbb"));
         assert!(result.contains("Keep"));
@@ -192,13 +177,12 @@ mod tests {
 
     #[test]
     fn apply_html_snippet_removals_skips_snippet_not_in_html() {
-        // Exercises the false branch of normalized_cleaned.contains(...)
         let removals = Removals {
             css_selectors_to_remove: vec![],
             html_to_remove: vec!["<p>This snippet is not in the html</p>".to_string()],
         };
         let html = "<p>Different content entirely</p>";
-        let result = apply_removals(html, &removals).unwrap();
+        let result = apply_removals(html, &removals);
         assert_eq!(result, html);
     }
 }

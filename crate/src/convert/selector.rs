@@ -1,13 +1,5 @@
-use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
-
-static SCRIPT_TAG_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"<script\b[^>]*>[\s\S]*?</script>").expect("BUG: invalid script tag regex")
-});
-static STYLE_TAG_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"<style\b[^>]*>[\s\S]*?</style>").expect("BUG: invalid style tag regex")
-});
 
 static SELECTOR_MAIN: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("main").expect("BUG: invalid 'main' selector"));
@@ -16,54 +8,30 @@ static SELECTOR_ARTICLE: LazyLock<Selector> =
 static SELECTOR_BODY: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("body").expect("BUG: invalid 'body' selector"));
 
-/// Strip `<script>` and/or `<style>` tags from raw HTML using regex.
+/// Strip elements whose tag name matches any entry in `tags` from raw HTML.
+///
+/// Uses DOM-based removal so serialization differences between the input and
+/// scraper's output don't cause silent no-ops.
 pub fn remove_elements(html: &str, tags: &[&str]) -> String {
-    let mut result = html.to_string();
-    for tag in tags {
-        match *tag {
-            "script" => {
-                result = SCRIPT_TAG_REGEX.replace_all(&result, "").to_string();
-            }
-            "style" => {
-                result = STYLE_TAG_REGEX.replace_all(&result, "").to_string();
-            }
-            _ => {}
-        }
-    }
-    result
+    crate::util::remove_matching(html, |el| tags.iter().any(|t| el.value().name() == *t))
 }
 
 /// Remove all elements matching the given CSS selectors.
 ///
-/// Collects matching elements, sorts by length descending (handles nesting),
-/// then removes in one pass.
+/// Uses DOM-based removal so serialization differences between the input and
+/// scraper's output don't cause silent no-ops.
 pub fn remove_by_css_selectors(html: &str, selectors: Option<&[String]>) -> String {
-    let Some(selectors) = selectors else {
+    let Some(selectors) = selectors.filter(|s| !s.is_empty()) else {
         return html.to_string();
     };
-    if selectors.is_empty() {
+    let parsed: Vec<Selector> = selectors
+        .iter()
+        .filter_map(|s| Selector::parse(s).ok())
+        .collect();
+    if parsed.is_empty() {
         return html.to_string();
     }
-
-    let document = Html::parse_document(html);
-    let mut to_remove = Vec::new();
-
-    for selector_str in selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            for element in document.select(&selector) {
-                to_remove.push(element.html());
-            }
-        }
-    }
-
-    to_remove.sort_by_key(|s| std::cmp::Reverse(s.len()));
-    to_remove.dedup();
-
-    let mut result = html.to_string();
-    for snippet in to_remove {
-        result = result.replace(&snippet, "");
-    }
-    result
+    crate::util::remove_matching(html, |el| parsed.iter().any(|sel| sel.matches(el)))
 }
 
 /// Narrow to a single content root element.
@@ -149,7 +117,6 @@ mod tests {
     #[test]
     fn remove_by_css_selectors_skips_invalid_selector() {
         let html = "<p>Keep</p>";
-        // "[" is an unclosed attribute selector — definitely invalid
         let result = remove_by_css_selectors(html, Some(&["[".to_string()]));
         assert_eq!(result, html);
     }
@@ -179,7 +146,6 @@ mod tests {
 
     #[test]
     fn remove_by_css_selectors_removes_multiple_matching_elements() {
-        // Exercises the sort-by-length closure with ≥2 elements to remove
         let html = "<div class=\"ad\">Ad A</div><p>Keep</p><div class=\"ad\">Ad B</div>";
         let result = remove_by_css_selectors(html, Some(&[".ad".to_string()]));
         assert!(!result.contains("Ad A"));
@@ -193,7 +159,25 @@ mod tests {
             "<html><body><article>One</article><article>Two</article></body></html>",
         );
         let element = select_content_root(&document, None).unwrap();
-        // Falls through article (ambiguous) to body (single)
         assert_eq!(element.value().name(), "body");
+    }
+
+    #[test]
+    fn remove_elements_handles_script_with_close_tag_in_string() {
+        // Script bodies that contain "</script" inside a string literal — DOM removal handles this safely.
+        let html = r#"<p>Keep</p><script>var s = "</script";</script><p>Also</p>"#;
+        let result = remove_elements(html, &["script"]);
+        assert!(!result.contains("<script>"));
+        assert!(result.contains("Keep"));
+        assert!(result.contains("Also"));
+    }
+
+    #[test]
+    fn remove_by_css_selectors_removes_duplicate_identical_elements() {
+        let html =
+            "<nav class=\"site-nav\">Menu</nav><p>Keep</p><nav class=\"site-nav\">Menu</nav>";
+        let result = remove_by_css_selectors(html, Some(&[".site-nav".to_string()]));
+        assert!(!result.contains("Menu"));
+        assert!(result.contains("Keep"));
     }
 }

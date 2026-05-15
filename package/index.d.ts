@@ -7,7 +7,42 @@ export interface Removals {
   cssSelectorsToRemove: Array<string>
   htmlToRemove: Array<string>
 }
-export declare function learn(pages: Array<Buffer | string>): Promise<Removals>
-export declare function learnSync(pages: Array<Buffer | string>): Removals
-export declare function convert(htmls: Array<Buffer | string>, removals?: Removals | undefined | null): Promise<Buffer[]>
-export declare function convertSync(htmls: Array<Buffer | string>, removals?: Removals | undefined | null): Array<Buffer>
+export interface LearnOptions {
+  /**
+   * Text patterns (case-insensitive) that suggest boilerplate content.
+   * Pass an empty array to disable pattern matching.
+   * Omit (null/undefined) to use the built-in defaults.
+   */
+  boilerplatePatterns?: Array<string>
+  /**
+   * Maximum times a selector can match per page before it is considered too broad.
+   * Defaults to `20`.
+   */
+  maxSelectorMatchesPerPage?: number
+  /** Minimum average stable-match ratio across all pages. Defaults to `0.6`. */
+  minSelectorAverageStableRatio?: number
+  /** Minimum per-page stable-match ratio. Defaults to `0.35`. */
+  minSelectorPerPageStableRatio?: number
+  /** Minimum text length for a snippet to qualify as boilerplate. Defaults to `40`. */
+  minSnippetTextLength?: number
+  /** Maximum text length for a snippet to qualify as boilerplate. Defaults to `240`. */
+  maxSnippetTextLength?: number
+}
+export interface ConvertOptions {
+  /** Boilerplate removals learned from a set of pages; applied before conversion. */
+  removals?: Removals
+  /** CSS selectors whose matching elements are removed before conversion. */
+  cssSelectorsToRemove?: Array<string>
+  /** CSS selectors that identify the main content root (first match wins). */
+  contentSelectors?: Array<string>
+  /** Link visible-text patterns whose matching `<a>`/`<button>` elements are removed. */
+  linkTextContentToRemove?: Array<string>
+  /** Link href prefixes whose matching elements are removed (e.g. `"javascript:"`). */
+  linkHrefsToRemove?: Array<string>
+  /** `<link rel="...">` tokens to exclude from the extracted `link` map. */
+  linkRelTokensToRemove?: Array<string>
+  /** When `true`, use text-density scoring to locate the main content element. */
+  useTextDensityFilter?: boolean
+}
+export declare function learn(pages: Array<string>, options?: LearnOptions | undefined | null): Removals
+export declare function convert(html: string, options?: ConvertOptions | undefined | null): string

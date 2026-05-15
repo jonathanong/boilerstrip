@@ -23,7 +23,7 @@ let options = ConvertOptions {
     removals: Some(removals),
     ..Default::default()
 };
-let result = convert(&html, &options)?;
+let result = convert(&html, &options);
 println!("{}", result.content);
 ```
 
@@ -33,8 +33,8 @@ println!("{}", result.content);
 
 ```rust
 pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, LearnError>;
-pub fn convert(html: &str, options: &ConvertOptions) -> Result<ConvertResult, ConvertError>;
-pub fn apply_removals(html: &str, removals: &Removals) -> Result<String, ApplyError>;
+pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult;
+pub fn apply_removals(html: &str, removals: &Removals) -> String;
 ```
 
 ### Types
@@ -43,6 +43,16 @@ pub fn apply_removals(html: &str, removals: &Removals) -> Result<String, ApplyEr
 pub struct Removals {
     pub css_selectors_to_remove: Vec<String>,
     pub html_to_remove: Vec<String>,
+}
+
+pub struct LearnOptions {
+    pub boilerplate_patterns: Option<Vec<String>>,
+    // Tuning knobs (all optional, default to built-in values):
+    pub max_selector_matches_per_page: Option<usize>,      // default: 20
+    pub min_selector_average_stable_ratio: Option<f64>,    // default: 0.6
+    pub min_selector_per_page_stable_ratio: Option<f64>,   // default: 0.35
+    pub min_snippet_text_length: Option<usize>,            // default: 40
+    pub max_snippet_text_length: Option<usize>,            // default: 240
 }
 
 pub struct ConvertOptions {
@@ -65,27 +75,16 @@ pub struct ConvertResult {
 }
 ```
 
-### Low-level building blocks
+### Internals feature
 
-The following are also re-exported for power users:
+Internal building blocks are available with the `internals` feature for power users who need direct access to the parsing, removal, and Markdown pipelines:
 
-```rust
-// Metadata extraction
-pub use convert::parser::{parse_html, extract_title, extract_meta_tags,
-    extract_link_tags, extract_canonical_url, extract_lang};
-
-// Element removal and content selection
-pub use convert::selector::{remove_elements, remove_by_css_selectors, select_content_root};
-
-// Text density and link filtering
-pub use convert::filter::{apply_text_density_filter, filter_links};
-
-// HTML → Markdown
-pub use convert::markdown::html_to_markdown;
-
-// Default boilerplate patterns
-pub use learn::default_boilerplate_patterns;
+```toml
+[dependencies]
+boilerstrip = { version = "0.1", features = ["internals"] }
 ```
+
+This exposes `convert::filter`, `convert::parser`, `convert::selector`, and `convert::markdown` re-exports. These APIs are not subject to stability guarantees outside of major version bumps.
 
 ## How the learning algorithm works
 

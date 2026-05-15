@@ -47,7 +47,7 @@ fn site_a_removals_clean_a_new_page() {
 
     // Apply removals to page1 and confirm nav + footer are gone
     let html = std::fs::read_to_string(fixtures_root().join("learn/site_a/page1.html")).unwrap();
-    let cleaned = boilerstrip::apply_removals(&html, &removals).unwrap();
+    let cleaned = boilerstrip::apply_removals(&html, &removals);
     assert!(!cleaned.contains("site-nav"), "nav should be removed");
     assert!(!cleaned.contains("site-footer"), "footer should be removed");
     assert!(cleaned.contains("Pancakes"), "content should remain");
