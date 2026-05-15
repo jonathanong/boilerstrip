@@ -50,14 +50,14 @@ fn do_learn(pages: &[Vec<u8>]) -> Result<boilerstrip::Removals> {
 }
 
 fn do_convert(htmls: &[Vec<u8>], removals: Option<&boilerstrip::Removals>) -> Result<Vec<Vec<u8>>> {
+    let options = ConvertOptions {
+        removals: removals.cloned(),
+        ..Default::default()
+    };
     htmls
         .iter()
         .map(|bytes| {
             let html = bytes_to_str(bytes)?;
-            let options = ConvertOptions {
-                removals: removals.cloned(),
-                ..Default::default()
-            };
             boilerstrip::convert(html, &options)
                 .map(|r| r.content.into_bytes())
                 .map_err(|e| napi::Error::from_reason(e.to_string()))

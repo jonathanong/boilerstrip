@@ -56,8 +56,8 @@ const markdowns = await convert(htmls, removals)  // Promise<Buffer[]>
 
 // Synchronous variants
 import { learnSync, convertSync } from 'boilerstrip'
-const removals = learnSync(pages)
-const markdowns = convertSync(htmls, removals)
+const removalsSync = learnSync(pages)
+const markdownsSync = convertSync(htmls, removalsSync)
 ```
 
 ## Repository layout
