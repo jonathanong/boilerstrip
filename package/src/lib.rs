@@ -136,12 +136,12 @@ impl Task for LearnTask {
     type JsValue = Removals;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let pages: Vec<String> = self
+        let pages: Vec<&str> = self
             .pages
             .iter()
-            .map(|b| String::from_utf8_lossy(b).into_owned())
-            .collect();
-        boilerstrip::learn(&pages, &self.options)
+            .map(|b| std::str::from_utf8(b).map_err(|e| napi::Error::from_reason(e.to_string())))
+            .collect::<napi::Result<_>>()?;
+        boilerstrip::learn(&pages.iter().map(|s| s.to_string()).collect::<Vec<_>>(), &self.options)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
@@ -171,8 +171,9 @@ impl Task for ConvertTask {
     type JsValue = ConvertResult;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let html = String::from_utf8_lossy(&self.html);
-        Ok(boilerstrip::convert(&html, &self.options))
+        let html = std::str::from_utf8(&self.html)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(boilerstrip::convert(html, &self.options))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
@@ -201,15 +202,14 @@ impl Task for ConvertManyTask {
     type JsValue = Vec<ConvertResult>;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let results = self
-            .htmls
+        self.htmls
             .par_iter()
             .map(|buf| {
-                let html = String::from_utf8_lossy(buf);
-                boilerstrip::convert(&html, &self.options)
+                let html = std::str::from_utf8(buf)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+                Ok(boilerstrip::convert(html, &self.options))
             })
-            .collect();
-        Ok(results)
+            .collect()
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {

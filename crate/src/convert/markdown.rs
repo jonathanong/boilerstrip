@@ -516,15 +516,13 @@ fn emit_gfm_table(ts: TableState, buf: &mut String) {
     buf.push('\n');
     for row in &ts.rows {
         buf.push('|');
-        for (i, cell) in row.iter().enumerate() {
+        let cells_written = row.len().min(col_count);
+        for cell in row.iter().take(cells_written) {
             buf.push(' ');
             buf.push_str(cell);
             buf.push_str(" |");
-            // If row is shorter than headers, pad with empty cells
-            let _ = i;
         }
-        // Pad missing columns
-        for _ in row.len()..col_count {
+        for _ in cells_written..col_count {
             buf.push_str("  |");
         }
         buf.push('\n');

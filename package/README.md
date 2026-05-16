@@ -15,9 +15,12 @@ npm install boilerstrip
 
 ## Migration: v0.1 → v0.2
 
-- All HTML inputs are now `Buffer` (not `string`). Pass `Buffer.from(html)` or read files with `readFileSync` (which returns Buffer by default).
-- `convert` now processes a single `Buffer` and returns a `ConvertResult` object (with `content`, `title`, `lang`, `meta`, `link`, `canonicalUrl` fields).
-- `convertMany` is a new batched API for converting multiple pages in one call.
+**Breaking changes:**
+
+- All HTML inputs are now `Buffer`. The previous API accepted `Buffer | string`; `string` inputs are no longer accepted and will cause a TypeScript type error. Pass `Buffer.from(html, 'utf8')` or read files with `readFileSync` (which returns Buffer by default).
+- `convert` now processes a single `Buffer` and returns a `ConvertResult` object (with `content`, `title`, `lang`, `meta`, `link`, `canonicalUrl` fields), not a raw Markdown string.
+- `convertMany` is a new batched API for converting multiple pages in one call — more efficient than calling `convert` in a loop.
+- Non-UTF-8 `Buffer` inputs (e.g. windows-1252, shift_jis) now return an explicit error rather than silently replacing invalid bytes.
 
 ## Usage
 
