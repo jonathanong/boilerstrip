@@ -144,7 +144,7 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-slim
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-slim
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             musl: true
           - os: ubuntu-24.04-arm
@@ -195,6 +195,9 @@ jobs:
         working-directory: package
         shell: bash
         run: pnpm exec napi build --platform --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
