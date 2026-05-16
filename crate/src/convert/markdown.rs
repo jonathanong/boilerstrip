@@ -536,3 +536,273 @@ fn collect_inline_text(el: &ElementRef<'_>) -> String {
     let raw: String = el.text().collect();
     normalize_inline_text(&raw)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use scraper::{Html, Selector};
+
+    fn md(html: &str) -> String {
+        let doc = Html::parse_document(&format!("<body>{html}</body>"));
+        let body = doc.select(&Selector::parse("body").unwrap()).next().unwrap();
+        element_to_markdown(body)
+    }
+
+    #[test]
+    fn br_emits_hard_break() {
+        let result = md("<p>Hello<br>World</p>");
+        assert!(result.contains("Hello") && result.contains("World"));
+    }
+
+    #[test]
+    fn hr_emits_rule() {
+        assert!(md("<p>A</p><hr><p>B</p>").contains("---"));
+    }
+
+    #[test]
+    fn img_with_src_and_alt() {
+        assert_eq!(md("<img src=\"/a.png\" alt=\"icon\">").trim(), "![icon](/a.png)");
+    }
+
+    #[test]
+    fn img_without_src_is_skipped() {
+        assert!(md("<img alt=\"x\">").trim().is_empty());
+    }
+
+    #[test]
+    fn img_empty_src_is_skipped() {
+        assert!(md("<img src=\"\" alt=\"x\">").trim().is_empty());
+    }
+
+    #[test]
+    fn pre_with_language_class() {
+        let result = md("<pre><code class=\"language-rust\">fn main(){}</code></pre>");
+        assert!(result.contains("```rust") && result.contains("fn main(){}"));
+    }
+
+    #[test]
+    fn pre_without_language_class() {
+        let result = md("<pre><code>plain code</code></pre>");
+        assert!(result.contains("```\n") && result.contains("plain code"));
+    }
+
+    #[test]
+    fn pre_plain_text_no_code_child() {
+        let result = md("<pre>raw\nnext</pre>");
+        assert!(result.contains("```") && result.contains("raw"));
+    }
+
+    #[test]
+    fn code_inline() {
+        assert!(md("<p><code>inline</code></p>").contains("`inline`"));
+    }
+
+    #[test]
+    fn code_inline_with_backtick_uses_double_tick() {
+        assert!(md("<p><code>has `tick`</code></p>").contains("``"));
+    }
+
+    #[test]
+    fn strong_bold() {
+        assert!(md("<p><strong>bold</strong></p>").contains("**bold**"));
+    }
+
+    #[test]
+    fn b_tag() {
+        assert!(md("<p><b>bold</b></p>").contains("**bold**"));
+    }
+
+    #[test]
+    fn strong_whitespace_only_is_skipped() {
+        assert!(!md("<p><strong>  </strong>after</p>").contains("**"));
+    }
+
+    #[test]
+    fn em_italic() {
+        assert!(md("<p><em>italic</em></p>").contains("*italic*"));
+    }
+
+    #[test]
+    fn i_tag() {
+        assert!(md("<p><i>italic</i></p>").contains("*italic*"));
+    }
+
+    #[test]
+    fn em_whitespace_only_is_skipped() {
+        assert!(!md("<p><em> </em>text</p>").contains("**"));
+    }
+
+    #[test]
+    fn del_strikethrough() {
+        assert!(md("<p><del>removed</del></p>").contains("~~removed~~"));
+    }
+
+    #[test]
+    fn s_tag() {
+        assert!(md("<p><s>crossed</s></p>").contains("~~crossed~~"));
+    }
+
+    #[test]
+    fn strike_tag() {
+        assert!(md("<p><strike>old</strike></p>").contains("~~old~~"));
+    }
+
+    #[test]
+    fn del_empty_is_skipped() {
+        assert!(!md("<p><del></del>after</p>").contains("~~"));
+    }
+
+    #[test]
+    fn link_with_href() {
+        assert!(md("<p><a href=\"/p\">click</a></p>").contains("[click](/p)"));
+    }
+
+    #[test]
+    fn link_without_href() {
+        let result = md("<p><a>plain</a></p>");
+        assert!(result.contains("plain") && !result.contains('['));
+    }
+
+    #[test]
+    fn link_empty_text_is_skipped() {
+        assert!(!md("<p><a href=\"/x\">  </a>after</p>").contains('['));
+    }
+
+    #[test]
+    fn ordered_list() {
+        let result = md("<ol><li>First</li><li>Second</li></ol>");
+        assert!(result.contains("1. First") && result.contains("2. Second"));
+    }
+
+    #[test]
+    fn ordered_list_with_start_attribute() {
+        assert!(md("<ol start=\"5\"><li>Fifth</li></ol>").contains("5. Fifth"));
+    }
+
+    #[test]
+    fn nested_unordered_list() {
+        let result = md("<ul><li>Parent<ul><li>Child</li></ul></li></ul>");
+        assert!(result.contains("* Parent") && result.contains("* Child"));
+    }
+
+    #[test]
+    fn blockquote_prefixes_lines() {
+        let result = md("<blockquote><p>Quoted</p></blockquote>");
+        assert!(result.contains("> ") && result.contains("Quoted"));
+    }
+
+    #[test]
+    fn table_basic_gfm() {
+        let result = md("<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>");
+        assert!(result.contains("| A |") && result.contains("| --- |") && result.contains("| 1 |"));
+    }
+
+    #[test]
+    fn table_with_tfoot_emits_rows() {
+        let result = md("<table><tr><th>H</th></tr><tfoot><tr><td>foot</td></tr></tfoot></table>");
+        assert!(result.contains("H") && result.contains("foot"));
+    }
+
+    #[test]
+    fn table_short_row_is_padded_to_column_count() {
+        let result = md("<table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>");
+        let data_row = result.lines().find(|l| l.contains("| 1 |")).expect("data row");
+        assert_eq!(data_row.matches('|').count(), 4);
+    }
+
+    #[test]
+    fn table_with_no_rows_produces_no_separator() {
+        assert!(!md("<table></table>").contains("| --- |"));
+    }
+
+    #[test]
+    fn table_inline_elements_in_cells() {
+        let html = "<table><thead><tr><th>H</th></tr></thead><tbody>\
+          <tr><td><strong>bold</strong></td></tr>\
+          <tr><td><em>italic</em></td></tr>\
+          <tr><td><del>del</del></td></tr>\
+          <tr><td><code>code</code></td></tr>\
+          <tr><td><a href=\"/x\">link</a></td></tr>\
+          <tr><td><img src=\"/i.png\" alt=\"img\"></td></tr>\
+        </tbody></table>";
+        let result = md(html);
+        assert!(result.contains("**bold**"));
+        assert!(result.contains("*italic*"));
+        assert!(result.contains("~~del~~"));
+        assert!(result.contains("`code`"));
+        assert!(result.contains("[link](/x)"));
+        assert!(result.contains("![img]"));
+    }
+
+    #[test]
+    fn table_br_in_cell_emits_space() {
+        let result = md("<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>A<br>B</td></tr></tbody></table>");
+        assert!(result.contains("H"));
+    }
+
+    #[test]
+    fn pre_inside_table_cell_text_goes_to_cell() {
+        let result = md("<table><thead><tr><th>H</th></tr></thead><tbody><tr><td><pre>code</pre></td></tr></tbody></table>");
+        assert!(result.contains("H"));
+    }
+
+    #[test]
+    fn figure_and_figcaption_emit_children() {
+        assert!(md("<figure><figcaption>Caption</figcaption></figure>").contains("Caption"));
+    }
+
+    #[test]
+    fn details_and_summary_emit_children() {
+        let result = md("<details><summary>Title</summary><p>content</p></details>");
+        assert!(result.contains("Title") && result.contains("content"));
+    }
+
+    #[test]
+    fn inline_containers_emit_text() {
+        for tag in ["span", "abbr", "cite", "kbd", "mark", "q", "small", "sub", "sup", "time",
+                    "var", "label", "bdi", "bdo", "u", "ins", "wbr"] {
+            let result = md(&format!("<p><{tag}>text</{tag}></p>"));
+            assert!(result.contains("text"), "tag={tag}");
+        }
+    }
+
+    #[test]
+    fn unknown_element_emits_children() {
+        assert!(md("<custom-el>content</custom-el>").contains("content"));
+    }
+
+    #[test]
+    fn html_comment_is_ignored() {
+        let result = md("<!-- comment --><p>visible</p>");
+        assert!(result.contains("visible") && !result.contains("comment"));
+    }
+
+    #[test]
+    fn collapse_blank_lines_multiple_blanks_become_one() {
+        assert_eq!(super::finalize("a\n\n\n\nb\n".to_string()), "a\n\nb");
+    }
+
+    #[test]
+    fn collapse_blank_lines_leading_blanks_stripped() {
+        assert_eq!(super::finalize("\n\nfirst\n".to_string()), "first");
+    }
+
+    #[test]
+    fn heading_levels() {
+        for (tag, prefix) in [("h1", "# "), ("h2", "## "), ("h3", "### "), ("h6", "###### ")] {
+            assert!(md(&format!("<{tag}>T</{tag}>")).contains(prefix), "tag={tag}");
+        }
+    }
+
+    #[test]
+    fn li_with_inline_element_child() {
+        let result = md("<ul><li><strong>bold item</strong></li><li><em>italic item</em></li></ul>");
+        assert!(result.contains("bold item") && result.contains("italic item"));
+    }
+
+    #[test]
+    fn script_and_noscript_skipped() {
+        let result = md("<script>evil()</script><noscript>fallback</noscript><p>keep</p>");
+        assert!(!result.contains("evil") && !result.contains("fallback") && result.contains("keep"));
+    }
+}

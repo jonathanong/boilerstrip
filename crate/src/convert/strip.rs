@@ -60,3 +60,28 @@ fn try_strip(
     rewriter.end()?;
     Ok(output)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_removes_script_and_style() {
+        let html = "<html><head><script>evil()</script></head><body><p>Keep</p></body></html>";
+        let out = String::from_utf8(strip_elements(html, &[])).unwrap();
+        assert!(!out.contains("evil") && out.contains("Keep"));
+    }
+
+    #[test]
+    fn strip_removes_matching_selector() {
+        let html = "<html><body><nav class=\"nav\">Menu</nav><p>Content</p></body></html>";
+        let out = String::from_utf8(strip_elements(html, &[".nav".to_string()])).unwrap();
+        assert!(!out.contains("Menu") && out.contains("Content"));
+    }
+
+    #[test]
+    fn strip_skips_invalid_selector() {
+        let out = String::from_utf8(strip_elements("<p>Keep</p>", &["[invalid".to_string()])).unwrap();
+        assert!(out.contains("Keep"));
+    }
+}

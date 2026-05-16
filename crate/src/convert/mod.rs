@@ -149,6 +149,54 @@ mod tests {
     }
 
     #[test]
+    fn convert_strips_via_css_selectors_option() {
+        let html = "<html><body><nav class=\"nav\">Menu</nav><p>Content</p></body></html>";
+        let options = ConvertOptions {
+            css_selectors_to_remove: Some(vec![".nav".to_string()]),
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(!result.content.contains("Menu") && result.content.contains("Content"));
+    }
+
+    #[test]
+    fn convert_strips_html_snippet_from_removals() {
+        use crate::learn::types::Removals;
+        let html = "<html><body><div><p>Footer text</p></div><main><p>Content</p></main></body></html>";
+        let options = ConvertOptions {
+            removals: Some(Removals {
+                css_selectors_to_remove: vec![],
+                html_to_remove: vec!["<p>Footer text</p>".to_string()],
+            }),
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(!result.content.contains("Footer text") && result.content.contains("Content"));
+    }
+
+    #[test]
+    fn convert_removes_links_by_href_prefix() {
+        let html = "<html><body><main><a href=\"javascript:void(0)\">JS</a><a href=\"/safe\">Safe</a></main></body></html>";
+        let options = ConvertOptions {
+            link_hrefs_to_remove: Some(vec!["javascript:".to_string()]),
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(!result.content.contains("JS") && result.content.contains("Safe"));
+    }
+
+    #[test]
+    fn convert_removes_links_by_text_content() {
+        let html = "<html><body><main><a href=\"/close\">Close</a><a href=\"/keep\">Keep</a></main></body></html>";
+        let options = ConvertOptions {
+            link_text_content_to_remove: Some(vec!["close".to_string()]),
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(!result.content.contains("Close") && result.content.contains("Keep"));
+    }
+
+    #[test]
     fn convert_text_density_filter_respects_removals() {
         use crate::learn::types::Removals;
         let footer_text = "Terms of service. ".repeat(20);

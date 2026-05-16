@@ -466,6 +466,12 @@ mod tests {
     }
 
     #[test]
+    fn parse_html_alias_works() {
+        let doc = parse_html("<html><head><title>T</title></head></html>");
+        assert_eq!(extract_title(&doc), Some("T".to_string()));
+    }
+
+    #[test]
     fn base_href_does_not_affect_canonical_extraction() {
         // <base href> is not resolved — canonical is read verbatim.
         // This is the documented behaviour; callers must resolve if needed.
