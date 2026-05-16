@@ -185,7 +185,7 @@ jobs:
 
       - name: Install musl tools
         if: matrix.musl
-        run: sudo apt-get install -y musl-tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Install dependencies
         working-directory: package
