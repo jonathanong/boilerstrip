@@ -142,8 +142,14 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-slim
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-slim
+            target: x86_64-unknown-linux-musl
+            musl: true
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            musl: true
           - os: windows-2025
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
@@ -174,6 +180,10 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 11
+
+      - name: Install musl tools
+        if: matrix.musl
+        run: sudo apt-get install -y musl-tools
 
       - name: Install dependencies
         working-directory: package
