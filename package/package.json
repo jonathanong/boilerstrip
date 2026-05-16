@@ -1,6 +1,6 @@
 {
   "name": "boilerstrip",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Learn site boilerplate selectors from a page set and convert HTML to Markdown",
   "main": "index.js",
   "types": "index.d.ts",
@@ -20,7 +20,11 @@
     "rag",
     "boilerplate"
   ],
-  "files": ["index.js", "index.d.ts", "*.node"],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
   "napi": {
     "binaryName": "boilerstrip",
     "targets": [
