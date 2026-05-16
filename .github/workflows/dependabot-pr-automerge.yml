@@ -20,7 +20,7 @@ jobs:
   automerge:
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 420
     steps:
       - uses: actions/github-script@v9
         with:
