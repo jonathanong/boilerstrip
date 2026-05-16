@@ -43,7 +43,7 @@ pub use learn::default_boilerplate_patterns;
 #[cfg(feature = "internals")]
 pub use convert::filter::{apply_text_density_filter, filter_links};
 #[cfg(feature = "internals")]
-pub use convert::markdown::html_to_markdown;
+pub use convert::markdown::element_to_markdown;
 #[cfg(feature = "internals")]
 pub use convert::parser::{
     extract_canonical_url, extract_lang, extract_link_tags, extract_meta_tags, extract_title,

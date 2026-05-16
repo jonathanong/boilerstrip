@@ -6,5 +6,5 @@
     "description": "Un article en français",
     "og:title": "Mon Article OG"
   },
-  "content": "Mon Article\n==========\n\nVoici le contenu principal de l'article."
+  "content": "# Mon Article\n\nVoici le contenu principal de l'article."
 }

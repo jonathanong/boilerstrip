@@ -1,9 +1,10 @@
 #![deny(clippy::all)]
 
 use boilerstrip::{ConvertOptions as RustConvertOptions, LearnOptions as RustLearnOptions};
-use napi::bindgen_prelude::AsyncTask;
+use napi::bindgen_prelude::{AsyncTask, Buffer};
 use napi::{Env, Task};
 use napi_derive::napi;
+use rayon::prelude::*;
 use serde_json::Value;
 
 #[napi(object)]
@@ -123,8 +124,10 @@ impl From<boilerstrip::ConvertResult> for ConvertResult {
     }
 }
 
+// ── learn ─────────────────────────────────────────────────────────────────────
+
 pub struct LearnTask {
-    pages: Vec<String>,
+    pages: Vec<Buffer>,
     options: RustLearnOptions,
 }
 
@@ -133,7 +136,16 @@ impl Task for LearnTask {
     type JsValue = Removals;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        boilerstrip::learn(&self.pages, &self.options)
+        let pages = self
+            .pages
+            .iter()
+            .map(|b| {
+                std::str::from_utf8(b)
+                    .map(str::to_owned)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))
+            })
+            .collect::<napi::Result<Vec<_>>>()?;
+        boilerstrip::learn(&pages, &self.options)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
@@ -142,8 +154,19 @@ impl Task for LearnTask {
     }
 }
 
+#[napi(ts_return_type = "Promise<Removals>")]
+pub fn learn(pages: Vec<Buffer>, options: Option<LearnOptions>) -> AsyncTask<LearnTask> {
+    let rust_options = options.map(RustLearnOptions::from).unwrap_or_default();
+    AsyncTask::new(LearnTask {
+        pages,
+        options: rust_options,
+    })
+}
+
+// ── convert ───────────────────────────────────────────────────────────────────
+
 pub struct ConvertTask {
-    html: String,
+    html: Buffer,
     options: RustConvertOptions,
 }
 
@@ -152,7 +175,9 @@ impl Task for ConvertTask {
     type JsValue = ConvertResult;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        Ok(boilerstrip::convert(&self.html, &self.options))
+        let html =
+            std::str::from_utf8(&self.html).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(boilerstrip::convert(html, &self.options))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
@@ -160,20 +185,50 @@ impl Task for ConvertTask {
     }
 }
 
-#[napi(ts_return_type = "Promise<Removals>")]
-pub fn learn(pages: Vec<String>, options: Option<LearnOptions>) -> AsyncTask<LearnTask> {
-    let rust_options = options.map(RustLearnOptions::from).unwrap_or_default();
-    AsyncTask::new(LearnTask {
-        pages,
+#[napi(ts_return_type = "Promise<ConvertResult>")]
+pub fn convert(html: Buffer, options: Option<ConvertOptions>) -> AsyncTask<ConvertTask> {
+    let rust_options = options.map(RustConvertOptions::from).unwrap_or_default();
+    AsyncTask::new(ConvertTask {
+        html,
         options: rust_options,
     })
 }
 
-#[napi(ts_return_type = "Promise<ConvertResult>")]
-pub fn convert(html: String, options: Option<ConvertOptions>) -> AsyncTask<ConvertTask> {
+// ── convertMany ───────────────────────────────────────────────────────────────
+
+pub struct ConvertManyTask {
+    htmls: Vec<Buffer>,
+    options: RustConvertOptions,
+}
+
+impl Task for ConvertManyTask {
+    type Output = Vec<boilerstrip::ConvertResult>;
+    type JsValue = Vec<ConvertResult>;
+
+    fn compute(&mut self) -> napi::Result<Self::Output> {
+        self.htmls
+            .par_iter()
+            .map(|buf| {
+                let html = std::str::from_utf8(buf)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+                Ok(boilerstrip::convert(html, &self.options))
+            })
+            .collect()
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
+        Ok(output.into_iter().map(ConvertResult::from).collect())
+    }
+}
+
+#[napi(ts_return_type = "Promise<ConvertResult[]>")]
+pub fn convert_many(
+    htmls: Vec<Buffer>,
+    options: Option<ConvertOptions>,
+) -> AsyncTask<ConvertManyTask> {
     let rust_options = options.map(RustConvertOptions::from).unwrap_or_default();
-    AsyncTask::new(ConvertTask {
-        html,
+    AsyncTask::new(ConvertManyTask {
+        htmls,
         options: rust_options,
     })
 }

@@ -35,22 +35,23 @@ fn apply_css_selector_removals(html: &str, selectors: &[String]) -> String {
     crate::util::remove_matching(html, |el| parsed.iter().any(|sel| sel.matches(el)))
 }
 
-fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
+pub(crate) fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
     let mut cleaned = html.to_string();
 
     let mut sorted_snippets = snippets.to_vec();
     sorted_snippets.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
 
-    let normalized_snippets: Vec<(String, &String)> = sorted_snippets
+    // Precompile all snippet regexes upfront — avoids Regex::new per iteration.
+    let compiled: Vec<(String, Regex)> = sorted_snippets
         .iter()
         .filter(|s| !s.trim().is_empty())
-        .map(|s| (normalize_whitespace(s), s))
+        .filter_map(|s| build_snippet_regex(s).map(|re| (normalize_whitespace(s), re)))
         .collect();
 
     let mut normalized_cleaned = normalize_whitespace(&cleaned);
-    for (normalized_snippet, original_snippet) in &normalized_snippets {
+    for (normalized_snippet, re) in &compiled {
         if normalized_cleaned.contains(normalized_snippet.as_str()) {
-            let next = remove_html_snippet(&cleaned, original_snippet);
+            let next = re.replace_all(&cleaned, "").to_string();
             if next != cleaned {
                 normalized_cleaned = normalize_whitespace(&next);
                 cleaned = next;
@@ -61,14 +62,7 @@ fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
     cleaned
 }
 
-fn normalize_whitespace(text: &str) -> String {
-    WHITESPACE_PATTERN
-        .replace_all(text, " ")
-        .trim()
-        .to_lowercase()
-}
-
-fn remove_html_snippet(html: &str, snippet: &str) -> String {
+fn build_snippet_regex(snippet: &str) -> Option<Regex> {
     let normalized_snippet = snippet.trim();
     let escaped = regex::escape(normalized_snippet);
     let flexible = WHITESPACE_PATTERN.replace_all(&escaped, r"\s+");
@@ -78,14 +72,14 @@ fn remove_html_snippet(html: &str, snippet: &str) -> String {
     let pattern = CONTENT_TAG_CLOSE_RE
         .replace_all(&with_tag_open, r"$1\s*<")
         .to_string();
-    apply_snippet_regex(html, &pattern)
+    Regex::new(&format!("(?i){pattern}")).ok()
 }
 
-fn apply_snippet_regex(html: &str, pattern: &str) -> String {
-    Regex::new(&format!("(?i){pattern}")).map_or_else(
-        |_| html.to_string(),
-        |re| re.replace_all(html, "").to_string(),
-    )
+fn normalize_whitespace(text: &str) -> String {
+    WHITESPACE_PATTERN
+        .replace_all(text, " ")
+        .trim()
+        .to_lowercase()
 }
 
 #[cfg(test)]
@@ -93,8 +87,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn invalid_dynamic_snippet_regex_leaves_html_unchanged() {
-        assert_eq!(apply_snippet_regex("<p>Keep</p>", "("), "<p>Keep</p>");
+    fn invalid_snippet_regex_is_skipped() {
+        // An HTML snippet that would produce an invalid regex after escaping/flexible
+        // replacement is silently skipped (build_snippet_regex returns None).
+        let result = apply_html_snippet_removals("<p>Keep</p>", &["(".to_string()]);
+        assert_eq!(result, "<p>Keep</p>");
     }
 
     #[test]

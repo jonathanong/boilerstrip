@@ -5,7 +5,7 @@
 
 Learn site boilerplate selectors from a set of HTML pages and convert HTML to clean Markdown with the boilerplate stripped.
 
-Given multiple HTML pages from the same website, `learn` discovers which CSS selectors and HTML snippets are boilerplate (navigation, footers, cookie banners, legal disclaimers, etc.) by finding elements whose text content is stable across pages. The resulting `Removals` can then be fed into `convert`, which strips the boilerplate and converts the remaining content to Markdown.
+Given multiple HTML pages from the same website, `learn` discovers which CSS selectors and HTML snippets are boilerplate (navigation, footers, cookie banners, legal disclaimers, etc.) by finding elements whose text content is stable across pages. The resulting `Removals` can then be fed into `convert` or `convertMany`, which strips the boilerplate and converts the remaining content to Markdown.
 
 ## Install
 
@@ -13,45 +13,82 @@ Given multiple HTML pages from the same website, `learn` discovers which CSS sel
 npm install boilerstrip
 ```
 
+## Migration: v0.1 → v0.2
+
+**Breaking changes:**
+
+- All HTML inputs are now `Buffer`. The previous API accepted `Buffer | string`; `string` inputs are no longer accepted and will cause a TypeScript type error. Pass `Buffer.from(html, 'utf8')` or read files with `readFileSync` (which returns Buffer by default).
+- `convert` now processes a single `Buffer` and returns a `ConvertResult` object (with `content`, `title`, `lang`, `meta`, `link`, `canonicalUrl` fields), not a raw Markdown string.
+- `convertMany` is a new batched API for converting multiple pages in one call — more efficient than calling `convert` in a loop.
+- Non-UTF-8 `Buffer` inputs (e.g. windows-1252, shift_jis) now return an explicit error rather than silently replacing invalid bytes.
+
 ## Usage
 
 ```js
-import { learn, convert } from 'boilerstrip'
+import { learn, convert, convertMany } from 'boilerstrip'
 
-// pages and htmls can be Buffer[] or string[] (or mixed)
-const removals = await learn(pages)               // Promise<Removals>
-const markdowns = await convert(htmls, removals)  // Promise<Buffer[]>
+// Learn boilerplate from multiple pages of the same site
+const removals = await learn([page1Buffer, page2Buffer, page3Buffer])
 
-// Synchronous variants
-import { learnSync, convertSync } from 'boilerstrip'
-const removals = learnSync(pages)
-const markdowns = convertSync(htmls, removals)
+// Convert a single page
+const result = await convert(htmlBuffer, { removals })
+console.log(result.content)   // Markdown string
+console.log(result.title)     // <title> text
+
+// Convert many pages in one batched call (more efficient than N convert() calls)
+const results = await convertMany([html1, html2, html3], { removals })
+results.forEach(r => console.log(r.content))
 ```
 
 ## API
 
-### `learn(pages): Promise<Removals>`
+### `learn(pages, options?): Promise<Removals>`
 
-Analyzes an array of HTML pages from the same site and returns the discovered boilerplate selectors and snippets.
+Analyzes an array of HTML pages from the same site and returns the discovered boilerplate selectors and snippets. Requires at least 2 pages.
 
-- `pages` — `Array<Buffer | string>` — HTML pages to analyze
+- `pages` — `Array<Buffer>` — at least 2 HTML pages to analyze
+- `options` — optional `LearnOptions`
 
-### `learnSync(pages): Removals`
+### `convert(html, options?): Promise<ConvertResult>`
 
-Synchronous version of `learn`.
+Strips boilerplate and converts a single HTML page to Markdown.
 
-### `convert(htmls, removals?): Promise<Buffer[]>`
+- `html` — `Buffer` — HTML page to convert
+- `options` — optional `ConvertOptions`
 
-Strips boilerplate and converts HTML to Markdown.
+### `convertMany(htmls, options?): Promise<ConvertResult[]>`
 
-- `htmls` — `Array<Buffer | string>` — HTML pages to convert
-- `removals` — optional `Removals` from `learn`; if omitted, converts without stripping
+Batched version of `convert`. Converts multiple HTML pages in a single N-API call. More efficient than calling `convert` in a loop when processing many pages.
 
-Returns `Buffer[]` — one Markdown buffer per input.
+- `htmls` — `Array<Buffer>` — HTML pages to convert
+- `options` — optional `ConvertOptions` applied to all pages
 
-### `convertSync(htmls, removals?): Buffer[]`
+### `ConvertResult`
 
-Synchronous version of `convert`.
+```ts
+interface ConvertResult {
+  content: string          // cleaned Markdown
+  title?: string           // <title> text
+  lang?: string            // <html lang="...">
+  canonicalUrl?: string    // <link rel="canonical" href="...">
+  meta: Record<string, string>   // <meta name/property> map
+  link: Record<string, string>   // <link rel> map
+}
+```
+
+### `ConvertOptions`
+
+```ts
+interface ConvertOptions {
+  removals?: Removals                  // from learn()
+  cssSelectorsToRemove?: string[]      // additional CSS selectors to strip
+  contentSelectors?: string[]          // CSS selectors for the main content root
+  linkTextContentToRemove?: string[]   // remove <a>/<button> by visible text
+  linkHrefsToRemove?: string[]         // remove <a> by href prefix (e.g. "javascript:")
+  linkRelTokensToRemove?: string[]     // exclude <link rel="..."> from link map
+  useTextDensityFilter?: boolean       // use text-density scoring to find main content
+}
+```
 
 ### `Removals`
 
@@ -63,6 +100,19 @@ interface Removals {
 ```
 
 The serializable result of `learn`. Can be stored and reused across runs.
+
+### `LearnOptions`
+
+```ts
+interface LearnOptions {
+  boilerplatePatterns?: string[]       // override built-in patterns; [] disables snippet matching
+  maxSelectorMatchesPerPage?: number   // default 20
+  minSelectorAverageStableRatio?: number  // default 0.6
+  minSelectorPerPageStableRatio?: number  // default 0.35
+  minSnippetTextLength?: number        // default 40
+  maxSnippetTextLength?: number        // default 240
+}
+```
 
 ## License
 
