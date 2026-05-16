@@ -1,5 +1,4 @@
 #![deny(clippy::all)]
-#![forbid(unsafe_code)]
 
 use boilerstrip::{ConvertOptions as RustConvertOptions, LearnOptions as RustLearnOptions};
 use napi::bindgen_prelude::{AsyncTask, Buffer};

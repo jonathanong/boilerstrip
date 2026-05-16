@@ -75,7 +75,11 @@ pub fn filter_links_inplace(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        document.tree.get_mut(id).expect("BUG: collected node id not in tree").detach();
+        document
+            .tree
+            .get_mut(id)
+            .expect("BUG: collected node id not in tree")
+            .detach();
     }
 }
 
@@ -112,7 +116,11 @@ pub fn filter_links(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        fragment.tree.get_mut(id).expect("BUG: collected node id not in tree").detach();
+        fragment
+            .tree
+            .get_mut(id)
+            .expect("BUG: collected node id not in tree")
+            .detach();
     }
     crate::util::serialize_fragment_body(&fragment)
 }
@@ -204,6 +212,9 @@ mod tests {
     fn filter_links_preserves_image_only_link() {
         let html = r#"<p><a href="/logo"><img src="logo.png" alt="Logo"></a></p>"#;
         let result = filter_links(html, &[], &[]);
-        assert!(result.contains("logo.png"), "image-only link should be preserved");
+        assert!(
+            result.contains("logo.png"),
+            "image-only link should be preserved"
+        );
     }
 }

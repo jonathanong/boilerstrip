@@ -19,7 +19,11 @@ pub(crate) fn remove_matching(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        fragment.tree.get_mut(id).expect("BUG: collected node id not in tree").detach();
+        fragment
+            .tree
+            .get_mut(id)
+            .expect("BUG: collected node id not in tree")
+            .detach();
     }
     serialize_fragment_body(&fragment)
 }

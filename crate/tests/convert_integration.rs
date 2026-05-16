@@ -78,6 +78,83 @@ fn anchor_wrapping_image_preserves_linked_image() {
 }
 
 #[test]
+fn whitespace_text_between_block_elements_is_skipped() {
+    // Whitespace text nodes between block elements should be skipped when pending_nl > 0.
+    // After <h1> renders, pending_nl=2; the "\n    " text before <p> is whitespace-only,
+    // so it hits the skip path in emit_node.
+    let html = "<html><body><main><h1>Title</h1>\n    <p>Content</p></main></body></html>";
+    let result = convert(html, &ConvertOptions::default());
+    assert!(result.content.contains("Title"));
+    assert!(result.content.contains("Content"));
+}
+
+#[test]
+fn debug_fixture_dom() {
+    // Check the actual fixture HTML DOM structure
+    let html = std::fs::read_to_string(fixtures_root().join("convert/basic_article.html")).unwrap();
+    let doc = scraper::Html::parse_document(&html);
+    let sel = scraper::Selector::parse("main").unwrap();
+    let main_el = doc.select(&sel).next().expect("main element must exist");
+    let node_ref: ego_tree::NodeRef<'_, scraper::Node> = *main_el;
+    println!("main direct children:");
+    for (i, child) in node_ref.children().enumerate() {
+        match child.value() {
+            scraper::Node::Text(t) => {
+                println!("  [{}] Text: {:?}", i, <str as AsRef<str>>::as_ref(t))
+            }
+            scraper::Node::Element(e) => println!("  [{}] Element: <{}>", i, e.name()),
+            _ => println!("  [{}] Other", i),
+        }
+    }
+}
+
+#[test]
+fn debug_lolhtml_and_dom() {
+    // Verify that lol_html preserves whitespace and html5ever creates correct DOM
+    let html = "<html><body><main><h1>Title</h1>\n    <p>Content</p></main></body></html>";
+
+    // Simulate what convert() does: lol_html strip pass
+    let mut output = Vec::with_capacity(html.len());
+    let mut rewriter = lol_html::HtmlRewriter::new(
+        lol_html::Settings {
+            element_content_handlers: vec![(
+                std::borrow::Cow::Owned("script, style".parse::<lol_html::Selector>().unwrap()),
+                lol_html::ElementContentHandlers::default().element(
+                    |el: &mut lol_html::html_content::Element<'_, '_>| {
+                        el.remove();
+                        Ok(())
+                    },
+                ),
+            )],
+            ..lol_html::Settings::default()
+        },
+        |c: &[u8]| output.extend_from_slice(c),
+    );
+    rewriter.write(html.as_bytes()).unwrap();
+    rewriter.end().unwrap();
+    let stripped = unsafe { String::from_utf8_unchecked(output) };
+    println!("lol_html output: {:?}", &stripped);
+
+    // Now parse with scraper like convert() does
+    let doc = scraper::Html::parse_document(&stripped);
+    let sel = scraper::Selector::parse("main").unwrap();
+    let main_el = doc.select(&sel).next().expect("main element must exist");
+    let node_ref: ego_tree::NodeRef<'_, scraper::Node> = *main_el;
+    let children: Vec<_> = node_ref.children().collect();
+    for (i, child) in children.iter().enumerate() {
+        match child.value() {
+            scraper::Node::Text(t) => {
+                println!("  [{}] Text: {:?}", i, <str as AsRef<str>>::as_ref(t))
+            }
+            scraper::Node::Element(e) => println!("  [{}] Element: <{}>", i, e.name()),
+            _ => println!("  [{}] Other", i),
+        }
+    }
+    println!("main children count: {}", children.len());
+    assert!(children.len() >= 2, "main should have at least 2 children");
+}
+
+#[test]
 fn deep_dom_does_not_stack_overflow() {
     let depth = 1500usize;
     let mut html = String::from("<html><body><main>");

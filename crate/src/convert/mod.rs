@@ -216,8 +216,14 @@ mod tests {
             ..Default::default()
         };
         let result = convert(html, &options);
-        assert!(result.link.get("me").is_none(), "me link should be filtered out");
-        assert!(result.link.get("canonical").is_some(), "canonical link should remain");
+        assert!(
+            result.link.get("me").is_none(),
+            "me link should be filtered out"
+        );
+        assert!(
+            result.link.get("canonical").is_some(),
+            "canonical link should remain"
+        );
     }
 
     #[test]
@@ -228,7 +234,10 @@ mod tests {
             ..Default::default()
         };
         let result = convert(html, &options);
-        assert!(result.content.contains("Article"), "article content should be selected");
+        assert!(
+            result.content.contains("Article"),
+            "article content should be selected"
+        );
         assert!(!result.content.contains("Nav"), "nav should be excluded");
     }
 

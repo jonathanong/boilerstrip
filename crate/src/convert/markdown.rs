@@ -112,16 +112,18 @@ fn emit_node(node: NodeRef<'_, Node>, state: &mut State) {
             if state.in_pre {
                 // pre content is always processed in a scratch State with table_state=None
                 state.buf.push_str(s);
+                return;
+            }
+            let normalized = normalize_inline_text(s);
+            // Skip whitespace-only text nodes at block boundaries (pending_nl > 0 means
+            // a block separator has already been queued; a lone space would be spurious).
+            if normalized.trim().is_empty() && state.pending_nl > 0 {
+                return;
+            }
+            if let Some(ts) = state.table_state.as_mut() {
+                ts.current_cell.push_str(&normalized);
             } else {
-                let normalized = normalize_inline_text(s);
-                // Skip whitespace-only text nodes at block boundaries to avoid spurious spaces.
-                if !normalized.trim().is_empty() || state.pending_nl == 0 {
-                    if let Some(ts) = state.table_state.as_mut() {
-                        ts.current_cell.push_str(&normalized);
-                    } else {
-                        state.push_str(&normalized);
-                    }
-                }
+                state.push_str(&normalized);
             }
         }
         Node::Element(_) => {
@@ -437,7 +439,10 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            let ts = state.table_state.take().expect("BUG: table state missing after table");
+            let ts = state
+                .table_state
+                .take()
+                .expect("BUG: table state missing after table");
             state.flush_pending();
             emit_gfm_table(ts, &mut state.buf);
             state.pending_nl = 0;
@@ -446,22 +451,39 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "thead" => {
-            state.table_state.as_mut().expect("BUG: thead outside table").in_head = true;
+            state
+                .table_state
+                .as_mut()
+                .expect("BUG: thead outside table")
+                .in_head = true;
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            state.table_state.as_mut().expect("BUG: thead outside table").in_head = false;
+            state
+                .table_state
+                .as_mut()
+                .expect("BUG: thead outside table")
+                .in_head = false;
         }
 
         "tbody" | "tfoot" => {
-            state.table_state.as_mut().expect("BUG: tbody/tfoot outside table").in_head = false;
+            state
+                .table_state
+                .as_mut()
+                .expect("BUG: tbody/tfoot outside table")
+                .in_head = false;
             for child in (*el).children() {
                 emit_node(child, state);
             }
         }
 
         "tr" => {
-            state.table_state.as_mut().expect("BUG: tr outside table").current_row.clear();
+            state
+                .table_state
+                .as_mut()
+                .expect("BUG: tr outside table")
+                .current_row
+                .clear();
             for child in (*el).children() {
                 emit_node(child, state);
             }
@@ -475,11 +497,19 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "th" | "td" => {
-            state.table_state.as_mut().expect("BUG: th/td outside table").current_cell.clear();
+            state
+                .table_state
+                .as_mut()
+                .expect("BUG: th/td outside table")
+                .current_cell
+                .clear();
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            let ts = state.table_state.as_mut().expect("BUG: th/td outside table");
+            let ts = state
+                .table_state
+                .as_mut()
+                .expect("BUG: th/td outside table");
             let cell = std::mem::take(&mut ts.current_cell);
             ts.current_row.push(cell.trim().to_string());
         }
@@ -932,5 +962,14 @@ mod tests {
         let result = md("<pre><ul><li>item</li></ul></pre>");
         // Content may or may not be exactly right, but must not panic
         let _ = result;
+    }
+
+    #[test]
+    fn whitespace_text_between_blocks_skipped_at_pending_nl() {
+        // "\n    " between </h1> and <p>: after h1 emits, pending_nl=2; the whitespace-only
+        // text node must be skipped (return at the pending_nl guard) rather than pushed.
+        let result = md("<h1>Title</h1>\n    <p>Content</p>");
+        assert!(result.contains("# Title"));
+        assert!(result.contains("Content"));
     }
 }

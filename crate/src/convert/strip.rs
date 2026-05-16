@@ -46,7 +46,9 @@ pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
     );
 
     // lol_html only fails if a handler returns Err; our handlers always return Ok.
-    rewriter.write(html.as_bytes()).expect("BUG: lol_html write failed on valid UTF-8 input");
+    rewriter
+        .write(html.as_bytes())
+        .expect("BUG: lol_html write failed on valid UTF-8 input");
     rewriter.end().expect("BUG: lol_html end failed");
     output
 }
@@ -72,8 +74,7 @@ mod tests {
     #[test]
     fn strip_skips_invalid_selector() {
         // ">>" is not a valid CSS selector; lol_html should reject it, so strip gracefully skips it
-        let out =
-            String::from_utf8(strip_elements("<p>Keep</p>", &[">>".to_string()])).unwrap();
+        let out = String::from_utf8(strip_elements("<p>Keep</p>", &[">>".to_string()])).unwrap();
         assert!(out.contains("Keep"));
     }
 }
