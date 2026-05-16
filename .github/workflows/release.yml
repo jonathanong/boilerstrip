@@ -112,7 +112,17 @@ jobs:
             }
           " "$version"
           cargo update -w
-          git add crate/Cargo.toml package/Cargo.toml Cargo.lock package/package.json
+          node -e "
+            const fs = require('node:fs');
+            const version = require('./package/package.json').version;
+            const p = 'package/index.js';
+            const src = fs.readFileSync(p, 'utf8');
+            const out = src
+              .replace(/bindingPackageVersion !== '\d+\.\d+\.\d+'/g, \`bindingPackageVersion !== '\${version}'\`)
+              .replace(/expected \d+\.\d+\.\d+ but got/g, \`expected \${version} but got\`);
+            if (out !== src) fs.writeFileSync(p, out);
+          "
+          git add crate/Cargo.toml package/Cargo.toml Cargo.lock package/package.json package/index.js
           git commit -m "chore(release): v$version"
           git tag -a "v$version" -m "v$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
