@@ -81,7 +81,8 @@ mod tests {
 
     #[test]
     fn strip_skips_invalid_selector() {
-        let out = String::from_utf8(strip_elements("<p>Keep</p>", &["[invalid".to_string()])).unwrap();
+        let out =
+            String::from_utf8(strip_elements("<p>Keep</p>", &["[invalid".to_string()])).unwrap();
         assert!(out.contains("Keep"));
     }
 }

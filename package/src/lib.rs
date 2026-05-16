@@ -141,8 +141,11 @@ impl Task for LearnTask {
             .iter()
             .map(|b| std::str::from_utf8(b).map_err(|e| napi::Error::from_reason(e.to_string())))
             .collect::<napi::Result<_>>()?;
-        boilerstrip::learn(&pages.iter().map(|s| s.to_string()).collect::<Vec<_>>(), &self.options)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
+        boilerstrip::learn(
+            &pages.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &self.options,
+        )
+        .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
@@ -171,8 +174,8 @@ impl Task for ConvertTask {
     type JsValue = ConvertResult;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let html = std::str::from_utf8(&self.html)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        let html =
+            std::str::from_utf8(&self.html).map_err(|e| napi::Error::from_reason(e.to_string()))?;
         Ok(boilerstrip::convert(html, &self.options))
     }
 

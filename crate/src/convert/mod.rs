@@ -162,7 +162,8 @@ mod tests {
     #[test]
     fn convert_strips_html_snippet_from_removals() {
         use crate::learn::types::Removals;
-        let html = "<html><body><div><p>Footer text</p></div><main><p>Content</p></main></body></html>";
+        let html =
+            "<html><body><div><p>Footer text</p></div><main><p>Content</p></main></body></html>";
         let options = ConvertOptions {
             removals: Some(Removals {
                 css_selectors_to_remove: vec![],

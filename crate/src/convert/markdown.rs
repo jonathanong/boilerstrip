@@ -542,7 +542,10 @@ mod tests {
 
     fn md(html: &str) -> String {
         let doc = Html::parse_document(&format!("<body>{html}</body>"));
-        let body = doc.select(&Selector::parse("body").unwrap()).next().unwrap();
+        let body = doc
+            .select(&Selector::parse("body").unwrap())
+            .next()
+            .unwrap();
         element_to_markdown(body)
     }
 
@@ -559,7 +562,10 @@ mod tests {
 
     #[test]
     fn img_with_src_and_alt() {
-        assert_eq!(md("<img src=\"/a.png\" alt=\"icon\">").trim(), "![icon](/a.png)");
+        assert_eq!(
+            md("<img src=\"/a.png\" alt=\"icon\">").trim(),
+            "![icon](/a.png)"
+        );
     }
 
     #[test]
@@ -704,7 +710,10 @@ mod tests {
     #[test]
     fn table_short_row_is_padded_to_column_count() {
         let result = md("<table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>");
-        let data_row = result.lines().find(|l| l.contains("| 1 |")).expect("data row");
+        let data_row = result
+            .lines()
+            .find(|l| l.contains("| 1 |"))
+            .expect("data row");
         assert_eq!(data_row.matches('|').count(), 4);
     }
 
@@ -757,8 +766,10 @@ mod tests {
 
     #[test]
     fn inline_containers_emit_text() {
-        for tag in ["span", "abbr", "cite", "kbd", "mark", "q", "small", "sub", "sup", "time",
-                    "var", "label", "bdi", "bdo", "u", "ins", "wbr"] {
+        for tag in [
+            "span", "abbr", "cite", "kbd", "mark", "q", "small", "sub", "sup", "time", "var",
+            "label", "bdi", "bdo", "u", "ins", "wbr",
+        ] {
             let result = md(&format!("<p><{tag}>text</{tag}></p>"));
             assert!(result.contains("text"), "tag={tag}");
         }
@@ -787,20 +798,31 @@ mod tests {
 
     #[test]
     fn heading_levels() {
-        for (tag, prefix) in [("h1", "# "), ("h2", "## "), ("h3", "### "), ("h6", "###### ")] {
-            assert!(md(&format!("<{tag}>T</{tag}>")).contains(prefix), "tag={tag}");
+        for (tag, prefix) in [
+            ("h1", "# "),
+            ("h2", "## "),
+            ("h3", "### "),
+            ("h6", "###### "),
+        ] {
+            assert!(
+                md(&format!("<{tag}>T</{tag}>")).contains(prefix),
+                "tag={tag}"
+            );
         }
     }
 
     #[test]
     fn li_with_inline_element_child() {
-        let result = md("<ul><li><strong>bold item</strong></li><li><em>italic item</em></li></ul>");
+        let result =
+            md("<ul><li><strong>bold item</strong></li><li><em>italic item</em></li></ul>");
         assert!(result.contains("bold item") && result.contains("italic item"));
     }
 
     #[test]
     fn script_and_noscript_skipped() {
         let result = md("<script>evil()</script><noscript>fallback</noscript><p>keep</p>");
-        assert!(!result.contains("evil") && !result.contains("fallback") && result.contains("keep"));
+        assert!(
+            !result.contains("evil") && !result.contains("fallback") && result.contains("keep")
+        );
     }
 }
