@@ -28,6 +28,7 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-slim
+    timeout-minutes: 420
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -58,6 +59,7 @@ jobs:
     name: Prepare release
     needs: validate
     runs-on: ubuntu-slim
+    timeout-minutes: 420
     outputs:
       version: ${{ steps.bump.outputs.version }}
     steps:
@@ -149,6 +151,7 @@ jobs:
           - os: windows-2025
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 420
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -199,6 +202,7 @@ jobs:
       - prepare
       - build
     runs-on: ubuntu-slim
+    timeout-minutes: 420
     steps:
       - name: Checkout
         uses: actions/checkout@v6
