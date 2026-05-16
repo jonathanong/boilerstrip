@@ -85,12 +85,12 @@ impl From<ConvertOptions> for RustConvertOptions {
     fn from(o: ConvertOptions) -> Self {
         Self {
             removals: o.removals.map(boilerstrip::Removals::from),
-            css_selectors_to_remove: o.css_selectors_to_remove,
-            content_selectors: o.content_selectors,
-            link_text_content_to_remove: o.link_text_content_to_remove,
-            link_hrefs_to_remove: o.link_hrefs_to_remove,
-            link_rel_tokens_to_remove: o.link_rel_tokens_to_remove,
-            use_text_density_filter: o.use_text_density_filter,
+            css_selectors_to_remove: o.css_selectors_to_remove.unwrap_or_default(),
+            content_selectors: o.content_selectors.unwrap_or_default(),
+            link_text_content_to_remove: o.link_text_content_to_remove.unwrap_or_default(),
+            link_hrefs_to_remove: o.link_hrefs_to_remove.unwrap_or_default(),
+            link_rel_tokens_to_remove: o.link_rel_tokens_to_remove.unwrap_or_default(),
+            use_text_density_filter: o.use_text_density_filter.unwrap_or(false),
         }
     }
 }
@@ -124,6 +124,16 @@ impl From<boilerstrip::ConvertResult> for ConvertResult {
     }
 }
 
+fn panic_message(payload: &Box<dyn std::any::Any + Send + 'static>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "unknown panic".to_string()
+    }
+}
+
 // ── learn ─────────────────────────────────────────────────────────────────────
 
 pub struct LearnTask {
@@ -136,17 +146,23 @@ impl Task for LearnTask {
     type JsValue = Removals;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let pages = self
-            .pages
-            .iter()
-            .map(|b| {
-                std::str::from_utf8(b)
-                    .map(str::to_owned)
-                    .map_err(|e| napi::Error::from_reason(e.to_string()))
-            })
-            .collect::<napi::Result<Vec<_>>>()?;
-        boilerstrip::learn(&pages, &self.options)
-            .map_err(|e| napi::Error::from_reason(e.to_string()))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let pages = self
+                .pages
+                .iter()
+                .enumerate()
+                .map(|(i, b)| {
+                    std::str::from_utf8(b)
+                        .map(str::to_owned)
+                        .map_err(|e| napi::Error::from_reason(format!("learn[{i}]: {e}")))
+                })
+                .collect::<napi::Result<Vec<_>>>()?;
+            boilerstrip::learn(&pages, &self.options)
+                .map_err(|e| napi::Error::from_reason(e.to_string()))
+        }))
+        .map_err(|payload| {
+            napi::Error::from_reason(format!("boilerstrip panic: {}", panic_message(&payload)))
+        })?
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
@@ -171,17 +187,25 @@ pub struct ConvertTask {
 }
 
 impl Task for ConvertTask {
-    type Output = boilerstrip::ConvertResult;
+    type Output = ConvertResult;
     type JsValue = ConvertResult;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let html =
-            std::str::from_utf8(&self.html).map_err(|e| napi::Error::from_reason(e.to_string()))?;
-        Ok(boilerstrip::convert(html, &self.options))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let html = std::str::from_utf8(&self.html)
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(ConvertResult::from(boilerstrip::convert(
+                html,
+                &self.options,
+            )))
+        }))
+        .map_err(|payload| {
+            napi::Error::from_reason(format!("boilerstrip panic: {}", panic_message(&payload)))
+        })?
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
-        Ok(ConvertResult::from(output))
+        Ok(output)
     }
 }
 
@@ -202,22 +226,31 @@ pub struct ConvertManyTask {
 }
 
 impl Task for ConvertManyTask {
-    type Output = Vec<boilerstrip::ConvertResult>;
+    type Output = Vec<ConvertResult>;
     type JsValue = Vec<ConvertResult>;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        self.htmls
-            .par_iter()
-            .map(|buf| {
-                let html = std::str::from_utf8(buf)
-                    .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-                Ok(boilerstrip::convert(html, &self.options))
-            })
-            .collect()
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.htmls
+                .par_iter()
+                .enumerate()
+                .map(|(i, buf)| {
+                    let html = std::str::from_utf8(buf)
+                        .map_err(|e| napi::Error::from_reason(format!("convertMany[{i}]: {e}")))?;
+                    Ok(ConvertResult::from(boilerstrip::convert(
+                        html,
+                        &self.options,
+                    )))
+                })
+                .collect()
+        }))
+        .map_err(|payload| {
+            napi::Error::from_reason(format!("boilerstrip panic: {}", panic_message(&payload)))
+        })?
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
-        Ok(output.into_iter().map(ConvertResult::from).collect())
+        Ok(output)
     }
 }
 

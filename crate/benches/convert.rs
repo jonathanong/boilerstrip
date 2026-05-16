@@ -52,7 +52,7 @@ fn bench_convert(c: &mut Criterion) {
 fn bench_convert_density(c: &mut Criterion) {
     let basic = fixture("convert/basic_article.html");
     let opts = ConvertOptions {
-        use_text_density_filter: Some(true),
+        use_text_density_filter: true,
         ..Default::default()
     };
     c.bench_function("convert/basic_article_density", |b| {

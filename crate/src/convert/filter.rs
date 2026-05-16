@@ -14,6 +14,9 @@ static SELECTOR_A: LazyLock<Selector> =
 static SELECTOR_A_BUTTON: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a, button").expect("BUG: invalid SELECTOR_A_BUTTON"));
 
+static SELECTOR_IMG: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("img").expect("BUG: invalid SELECTOR_IMG"));
+
 /// Penalty applied per link in text density calculation.
 const TEXT_DENSITY_LINK_PENALTY: i32 = 20;
 
@@ -63,8 +66,8 @@ fn calculate_text_density_score(element: &ElementRef) -> i32 {
 /// as it avoids a serialization + re-parse round-trip.
 pub fn filter_links_inplace(
     document: &mut Html,
-    link_text_content_to_remove: Option<&[String]>,
-    link_hrefs_to_remove: Option<&[String]>,
+    link_text_content_to_remove: &[String],
+    link_hrefs_to_remove: &[String],
 ) {
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
@@ -72,20 +75,24 @@ pub fn filter_links_inplace(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        if let Some(mut node) = document.tree.get_mut(id) {
-            node.detach();
-        }
+        document
+            .tree
+            .get_mut(id)
+            .expect("BUG: collected node id not in tree")
+            .detach();
     }
 }
 
 fn should_remove_link(
     el: &ElementRef<'_>,
-    link_text_content_to_remove: Option<&[String]>,
-    link_hrefs_to_remove: Option<&[String]>,
+    link_text_content_to_remove: &[String],
+    link_hrefs_to_remove: &[String],
 ) -> bool {
     let text: String = el.text().collect();
     let href = el.value().attr("href");
-    text.trim().is_empty()
+    let has_image = el.select(&SELECTOR_IMG).next().is_some();
+    // Keep image-only links: they have no text but contain visible content.
+    (text.trim().is_empty() && !has_image)
         || href.is_none()
         || href.is_some_and(|h| h.starts_with('#'))
         || should_remove_by_text(&text, link_text_content_to_remove)
@@ -99,8 +106,8 @@ fn should_remove_link(
 /// scraper's output don't cause silent no-ops.
 pub fn filter_links(
     html: &str,
-    link_text_content_to_remove: Option<&[String]>,
-    link_hrefs_to_remove: Option<&[String]>,
+    link_text_content_to_remove: &[String],
+    link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
     let ids: Vec<_> = fragment
@@ -109,27 +116,27 @@ pub fn filter_links(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        if let Some(mut node) = fragment.tree.get_mut(id) {
-            node.detach();
-        }
+        fragment
+            .tree
+            .get_mut(id)
+            .expect("BUG: collected node id not in tree")
+            .detach();
     }
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns: Option<&[String]>) -> bool {
-    patterns.is_some_and(|patterns| {
+fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
+    !patterns.is_empty() && {
         let text_lower = text.to_lowercase();
         patterns
             .iter()
             .any(|p| text_lower.contains(&p.to_lowercase()))
-    })
+    }
 }
 
-fn should_remove_by_href(href: Option<&str>, patterns: Option<&[String]>) -> bool {
-    match (href, patterns) {
-        (Some(h), Some(p)) => p.iter().any(|pat| h.starts_with(pat.as_str())),
-        _ => false,
-    }
+fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
+    !patterns.is_empty()
+        && href.is_some_and(|h| patterns.iter().any(|pat| h.starts_with(pat.as_str())))
 }
 
 #[cfg(test)]
@@ -173,7 +180,7 @@ mod tests {
     fn filter_links_removes_empty_and_anchor_links() {
         let html =
             "<p><a href=\"/page\">Keep me</a> <a href=\"#\">Skip</a> <a href=\"/x\"></a></p>";
-        let result = filter_links(html, None, None);
+        let result = filter_links(html, &[], &[]);
         assert!(result.contains("Keep me"));
         assert!(!result.contains("href=\"#\""));
     }
@@ -181,7 +188,7 @@ mod tests {
     #[test]
     fn filter_links_removes_by_text_pattern() {
         let html = r#"<p><a href="/close">Close</a> <a href="/keep">Keep</a></p>"#;
-        let result = filter_links(html, Some(&["close".to_string()]), None);
+        let result = filter_links(html, &["close".to_string()], &[]);
         assert!(!result.contains("Close"));
         assert!(result.contains("Keep"));
     }
@@ -189,7 +196,7 @@ mod tests {
     #[test]
     fn filter_links_removes_by_href_prefix() {
         let html = r#"<p><a href="javascript:void(0)">Click</a> <a href="/safe">Safe</a></p>"#;
-        let result = filter_links(html, None, Some(&["javascript:".to_string()]));
+        let result = filter_links(html, &[], &["javascript:".to_string()]);
         assert!(!result.contains("javascript:"));
         assert!(result.contains("Safe"));
     }
@@ -197,7 +204,17 @@ mod tests {
     #[test]
     fn filter_links_removes_button_without_href() {
         let html = "<p><button>Click</button></p>";
-        let result = filter_links(html, None, None);
+        let result = filter_links(html, &[], &[]);
         assert!(!result.contains("<button>"));
+    }
+
+    #[test]
+    fn filter_links_preserves_image_only_link() {
+        let html = r#"<p><a href="/logo"><img src="logo.png" alt="Logo"></a></p>"#;
+        let result = filter_links(html, &[], &[]);
+        assert!(
+            result.contains("logo.png"),
+            "image-only link should be preserved"
+        );
     }
 }

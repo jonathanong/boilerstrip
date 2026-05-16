@@ -7,18 +7,7 @@ use lol_html::{ElementContentHandlers, HtmlRewriter, Settings};
 /// `<script>`, `<style>`, and any additional selectors in `remove_selectors`.
 ///
 /// Silently skips selectors that lol_html cannot parse.
-/// Falls back to returning the original bytes on rewriting errors.
 pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
-    match try_strip(html, remove_selectors) {
-        Ok(out) => out,
-        Err(_) => html.as_bytes().to_vec(),
-    }
-}
-
-fn try_strip(
-    html: &str,
-    remove_selectors: &[String],
-) -> Result<Vec<u8>, lol_html::errors::RewritingError> {
     let mut output = Vec::with_capacity(html.len());
 
     let mut element_content_handlers: Vec<(
@@ -56,9 +45,12 @@ fn try_strip(
         |c: &[u8]| output.extend_from_slice(c),
     );
 
-    rewriter.write(html.as_bytes())?;
-    rewriter.end()?;
-    Ok(output)
+    // Our handlers always return Ok.  Ignore any lol_html internal error rather
+    // than panicking; `output` may be partial in that case, which is acceptable
+    // (the DOM parse step that follows will still produce usable output).
+    rewriter.write(html.as_bytes()).ok();
+    rewriter.end().ok();
+    output
 }
 
 #[cfg(test)]
@@ -81,8 +73,8 @@ mod tests {
 
     #[test]
     fn strip_skips_invalid_selector() {
-        let out =
-            String::from_utf8(strip_elements("<p>Keep</p>", &["[invalid".to_string()])).unwrap();
+        // ">>" is not a valid CSS selector; lol_html should reject it, so strip gracefully skips it
+        let out = String::from_utf8(strip_elements("<p>Keep</p>", &[">>".to_string()])).unwrap();
         assert!(out.contains("Keep"));
     }
 }

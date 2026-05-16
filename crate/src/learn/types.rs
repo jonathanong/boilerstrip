@@ -112,6 +112,18 @@ impl SelectorStats {
             .or_insert(0) += 1;
     }
 
+    pub fn merge(&mut self, other: SelectorStats) {
+        for (page_index, count) in other.page_total_matches {
+            *self.page_total_matches.entry(page_index).or_insert(0) += count;
+        }
+        for (page_index, fingerprint_matches) in other.page_fingerprint_matches {
+            let entry = self.page_fingerprint_matches.entry(page_index).or_default();
+            for (fp, count) in fingerprint_matches {
+                *entry.entry(fp).or_insert(0) += count;
+            }
+        }
+    }
+
     pub fn score(&self, min_shared_pages: usize, config: &LearnConfig) -> Option<u64> {
         if self.page_total_matches.len() < min_shared_pages {
             return None;
@@ -344,5 +356,35 @@ mod tests {
     fn learn_error_display() {
         let err = LearnError::TooFewPages(1);
         assert!(err.to_string().contains("1"));
+    }
+
+    #[test]
+    fn selector_stats_merge_combines_counts() {
+        let mut a = SelectorStats::new();
+        a.record(0, "fp1");
+        a.record(0, "fp1");
+        a.record(1, "fp2");
+
+        let mut b = SelectorStats::new();
+        b.record(0, "fp1");
+        b.record(2, "fp3");
+
+        a.merge(b);
+
+        // page 0 total = 2 + 1 = 3
+        assert_eq!(*a.page_total_matches.get(&0).unwrap(), 3);
+        // page 1 total = 1
+        assert_eq!(*a.page_total_matches.get(&1).unwrap(), 1);
+        // page 2 total = 1
+        assert_eq!(*a.page_total_matches.get(&2).unwrap(), 1);
+        // page 0 fingerprint fp1 = 2 + 1 = 3
+        assert_eq!(
+            *a.page_fingerprint_matches
+                .get(&0)
+                .unwrap()
+                .get("fp1")
+                .unwrap(),
+            3
+        );
     }
 }

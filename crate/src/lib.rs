@@ -37,7 +37,9 @@ pub use convert::types::{ConvertOptions, ConvertResult};
 pub use learn::types::{LearnError, LearnOptions, Removals};
 
 pub use learn::apply_removals;
+pub use learn::apply_removals_compiled;
 pub use learn::default_boilerplate_patterns;
+pub use learn::CompiledRemovals;
 
 // ── Low-level building blocks (available with the `internals` feature) ────────
 #[cfg(feature = "internals")]
