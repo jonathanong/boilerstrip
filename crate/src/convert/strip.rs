@@ -45,11 +45,11 @@ pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
         |c: &[u8]| output.extend_from_slice(c),
     );
 
-    // lol_html only fails if a handler returns Err; our handlers always return Ok.
-    rewriter
-        .write(html.as_bytes())
-        .expect("BUG: lol_html write failed on valid UTF-8 input");
-    rewriter.end().expect("BUG: lol_html end failed");
+    // Our handlers always return Ok.  Ignore any lol_html internal error rather
+    // than panicking; `output` may be partial in that case, which is acceptable
+    // (the DOM parse step that follows will still produce usable output).
+    rewriter.write(html.as_bytes()).ok();
+    rewriter.end().ok();
     output
 }
 

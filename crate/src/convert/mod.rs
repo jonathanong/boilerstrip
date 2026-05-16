@@ -41,10 +41,10 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
 
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
     let stripped_bytes = strip::strip_elements(html, &remove_selectors);
-    // SAFETY: input was already &str (valid UTF-8); lol_html only removes whole
-    // elements and their content, never splits a multi-byte sequence, so the
-    // output is still valid UTF-8.
-    let mut working_html = unsafe { String::from_utf8_unchecked(stripped_bytes) };
+    // lol_html only removes whole elements and their content, never splits a
+    // multi-byte sequence, so the output is still valid UTF-8 when the input is.
+    let mut working_html = String::from_utf8(stripped_bytes)
+        .expect("BUG: lol_html produced invalid UTF-8 from valid UTF-8 input");
 
     // Phase 1b — text-based snippet removal (regex, O(n)).
     if let Some(removals) = &options.removals {

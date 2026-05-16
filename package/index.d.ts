@@ -25,9 +25,9 @@ export interface ConvertResult {
   /** Page title from `<title>`. */
   title?: string
   /** `<meta name/property>` map as a plain object. */
-  meta: Record<string, string>
+  meta: any
   /** `<link rel>` map as a plain object. */
-  link: Record<string, string>
+  link: any
   /** Cleaned Markdown content. */
   content: string
   /** Canonical URL from `<link rel="canonical">`. */

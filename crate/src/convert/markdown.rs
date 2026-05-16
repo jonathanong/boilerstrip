@@ -451,6 +451,7 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "thead" => {
+            // html5ever always nests <thead> inside <table>, so table_state is Some here.
             state
                 .table_state
                 .as_mut()
@@ -467,6 +468,7 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "tbody" | "tfoot" => {
+            // html5ever always nests these inside <table>, so table_state is Some here.
             state
                 .table_state
                 .as_mut()
@@ -478,40 +480,33 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "tr" => {
-            state
-                .table_state
-                .as_mut()
-                .expect("BUG: tr outside table")
-                .current_row
-                .clear();
+            if let Some(ts) = state.table_state.as_mut() {
+                ts.current_row.clear();
+            }
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            let ts = state.table_state.as_mut().expect("BUG: tr outside table");
-            let row = std::mem::take(&mut ts.current_row);
-            if ts.in_head || ts.headers.is_empty() {
-                ts.headers = row;
-            } else {
-                ts.rows.push(row);
+            if let Some(ts) = state.table_state.as_mut() {
+                let row = std::mem::take(&mut ts.current_row);
+                if ts.in_head || ts.headers.is_empty() {
+                    ts.headers = row;
+                } else {
+                    ts.rows.push(row);
+                }
             }
         }
 
         "th" | "td" => {
-            state
-                .table_state
-                .as_mut()
-                .expect("BUG: th/td outside table")
-                .current_cell
-                .clear();
+            if let Some(ts) = state.table_state.as_mut() {
+                ts.current_cell.clear();
+            }
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            let ts = state
-                .table_state
-                .as_mut()
-                .expect("BUG: th/td outside table");
-            let cell = std::mem::take(&mut ts.current_cell);
-            ts.current_row.push(cell.trim().to_string());
+            if let Some(ts) = state.table_state.as_mut() {
+                let cell = std::mem::take(&mut ts.current_cell);
+                ts.current_row.push(cell.trim().to_string());
+            }
         }
 
         // Block containers — emit children with surrounding blank lines
@@ -971,5 +966,23 @@ mod tests {
         let result = md("<h1>Title</h1>\n    <p>Content</p>");
         assert!(result.contains("# Title"));
         assert!(result.contains("Content"));
+    }
+
+    #[test]
+    fn table_subelements_as_root_do_not_panic() {
+        // element_to_markdown called directly on <tbody>/<tr> roots means the "tr" and
+        // "th"/"td" emit_element arms run with table_state=None (no enclosing "table" arm
+        // to initialise it).  The if-let-Some guards must handle that gracefully.
+        let doc =
+            Html::parse_document("<table><tbody><tr><td>A</td><th>B</th></tr></tbody></table>");
+        // tbody root → children are <tr> → emit_element("tr", table_state=None)
+        let tbody = doc
+            .select(&Selector::parse("tbody").unwrap())
+            .next()
+            .unwrap();
+        let _ = element_to_markdown(tbody);
+        // tr root → children are <td>/<th> → emit_element("td"/"th", table_state=None)
+        let tr = doc.select(&Selector::parse("tr").unwrap()).next().unwrap();
+        let _ = element_to_markdown(tr);
     }
 }

@@ -169,3 +169,17 @@ fn deep_dom_does_not_stack_overflow() {
     // Must not panic or stack-overflow
     let _result = convert(&html, &ConvertOptions::default());
 }
+
+#[test]
+fn table_subelement_as_content_root_does_not_panic() {
+    // Using content_selectors to pick <thead> as the content root means
+    // element_to_markdown walks <tr>/<th>/<td> children with table_state=None.
+    // The if-let-Some guards in emit_element must not panic in that case.
+    let html = "<html><body><table><thead><tr><th>H1</th><th>H2</th></tr></thead>\
+                <tbody><tr><td>A</td><td>B</td></tr></tbody></table></body></html>";
+    let options = ConvertOptions {
+        content_selectors: vec!["thead".to_string()],
+        ..Default::default()
+    };
+    let _result = convert(html, &options);
+}
