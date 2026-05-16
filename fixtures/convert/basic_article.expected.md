@@ -1,5 +1,4 @@
-Getting Started
-==========
+# Getting Started
 
 This is the first paragraph of the article.
 

@@ -1,13 +1,12 @@
 //! HTML-to-Markdown conversion with configurable content extraction.
 //!
-//! [`convert`] processes raw HTML through a multi-stage pipeline:
+//! [`convert`] processes raw HTML through a two-phase pipeline:
 //!
-//! 1. Extract metadata (title, meta tags, link tags, canonical URL, lang).
-//! 2. Remove `<script>` and `<style>` tags.
-//! 3. Optionally apply learned [`Removals`][crate::learn::types::Removals] and extra CSS selectors.
-//! 4. Locate the main content root (text-density, user selectors, or semantic elements).
-//! 5. Filter unwanted links.
-//! 6. Convert cleaned HTML to Markdown.
+//! 1. **Strip phase** (streaming, via `lol_html`): remove `<script>`/`<style>`
+//!    and boilerplate CSS selectors in one pass.  Then text-based snippet
+//!    removal (regex, O(n)).
+//! 2. **DOM phase** (single scraper parse): extract metadata, filter links
+//!    in-place, locate the content root, emit Markdown via a custom tree walker.
 //!
 //! ## Quick start
 //!
@@ -24,58 +23,63 @@ pub mod filter;
 pub mod markdown;
 pub mod parser;
 pub mod selector;
+pub mod strip;
 pub mod types;
 
 pub use types::{ConvertOptions, ConvertResult};
 
-use crate::learn::apply_removals;
+use crate::learn::apply::apply_html_snippet_removals;
 
 /// Convert raw HTML into Markdown with extracted metadata.
 pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
-    // Step 1: Extract metadata from the original HTML before any content removal.
-    let document = parser::parse_html(html);
+    // Collect all CSS selectors to strip in the streaming pass.
+    let mut remove_selectors: Vec<String> = Vec::new();
+    if let Some(removals) = &options.removals {
+        remove_selectors.extend(removals.css_selectors_to_remove.iter().cloned());
+    }
+    if let Some(sels) = &options.css_selectors_to_remove {
+        remove_selectors.extend(sels.iter().cloned());
+    }
+
+    // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
+    let stripped_bytes = strip::strip_elements(html, &remove_selectors);
+    let mut working_html = String::from_utf8_lossy(&stripped_bytes).into_owned();
+
+    // Phase 1b — text-based snippet removal (regex, O(n)).
+    if let Some(removals) = &options.removals {
+        if !removals.html_to_remove.is_empty() {
+            working_html = apply_html_snippet_removals(&working_html, &removals.html_to_remove);
+        }
+    }
+
+    // Phase 2 — single scraper DOM parse.
+    let mut document = scraper::Html::parse_document(&working_html);
+
+    // Extract metadata from this already-stripped DOM (title/meta/link still present).
     let title = parser::extract_title(&document);
     let meta = parser::extract_meta_tags(&document);
     let link = parser::extract_link_tags(&document, options.link_rel_tokens_to_remove.as_deref());
     let canonical_url = parser::extract_canonical_url(&document);
     let lang = parser::extract_lang(&document);
 
-    // Step 2: Remove scripts and styles.
-    let cleaned_html = selector::remove_elements(html, &["script", "style"]);
-
-    // Step 3: Apply learned removals + extra CSS selectors.
-    let mut working_html = cleaned_html;
-
-    if let Some(removals) = &options.removals {
-        working_html = apply_removals(&working_html, removals);
-    }
-
-    working_html = selector::remove_by_css_selectors(
-        &working_html,
-        options.css_selectors_to_remove.as_deref(),
-    );
-
-    // Step 4: Find the main content root. Re-parse from working_html so removals are reflected.
-    let working_document = parser::parse_html(&working_html);
-    working_html = if let Some(true) = options.use_text_density_filter {
-        filter::apply_text_density_filter(&working_document)
-            .map(|el| el.html())
-            .unwrap_or(working_html)
-    } else {
-        selector::select_content_root(&working_document, options.content_selectors.as_deref())
-            .expect("BUG: parsed HTML document should always yield a content root")
-            .html()
-    };
-
-    // Step 5: Filter unwanted links.
-    working_html = filter::filter_links(
-        &working_html,
+    // Filter links in-place (no re-parse).
+    filter::filter_links_inplace(
+        &mut document,
         options.link_text_content_to_remove.as_deref(),
         options.link_hrefs_to_remove.as_deref(),
     );
 
-    // Step 6: Convert to Markdown.
-    let content = markdown::html_to_markdown(&working_html);
+    // Select content root.
+    let content_root = if options.use_text_density_filter == Some(true) {
+        filter::apply_text_density_filter(&document)
+    } else {
+        selector::select_content_root(&document, options.content_selectors.as_deref())
+    };
+
+    // Emit Markdown via custom tree walker (no additional parse).
+    let content = content_root
+        .map(|el| markdown::element_to_markdown(el))
+        .unwrap_or_default();
 
     ConvertResult {
         title,
@@ -146,9 +150,6 @@ mod tests {
 
     #[test]
     fn convert_text_density_filter_respects_removals() {
-        // Boilerplate footer is long enough to win density scoring without removals.
-        // With both use_text_density_filter and a CSS removal selector, the boilerplate
-        // must be absent (regression test for the ordering bug in step 4).
         use crate::learn::types::Removals;
         let footer_text = "Terms of service. ".repeat(20);
         let html = format!(

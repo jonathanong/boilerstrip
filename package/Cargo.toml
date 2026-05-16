@@ -1,6 +1,6 @@
 [package]
 name = "boilerstrip-node"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 boilerstrip = { path = "../crate" }
 napi = { version = "3", features = ["napi4", "serde-json"] }
 napi-derive = "3"
+rayon = "1.12"
 serde_json = "1.0"
 
 [build-dependencies]

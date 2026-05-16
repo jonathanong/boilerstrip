@@ -20,7 +20,7 @@
 //! assert!(removals.css_selectors_to_remove.iter().any(|s| s == ".site-nav"));
 //! ```
 
-mod apply;
+pub(crate) mod apply;
 mod constants;
 mod dom;
 mod fingerprint;
@@ -28,6 +28,7 @@ mod selectors;
 mod snippets;
 pub mod types;
 
+use rayon::prelude::*;
 use scraper::Html;
 use std::collections::{HashMap, HashSet};
 
@@ -62,29 +63,42 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
 
     let config = LearnConfig::from_options(options);
     let min_shared_pages = minimum_shared_page_count(pages.len());
+
+    // Parse and score each page in parallel; merge results sequentially.
+    type PageStats = Vec<(String, usize, String)>; // (selector, page_index, fingerprint)
+    let per_page: Vec<PageStats> = pages
+        .par_iter()
+        .enumerate()
+        .map(|(page_index, page_html)| {
+            let document = Html::parse_document(page_html);
+            let mut entries = Vec::new();
+            for element in document.select(&SELECTOR_ALL_ELEMENTS) {
+                if should_skip_element(&element) {
+                    continue;
+                }
+                let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
+                if text.is_empty() {
+                    continue;
+                }
+                let fingerprint = normalized_text_fingerprint(&text);
+                if fingerprint.is_empty() {
+                    continue;
+                }
+                for selector in selector_candidates(&element) {
+                    entries.push((selector, page_index, fingerprint.clone()));
+                }
+            }
+            entries
+        })
+        .collect();
+
     let mut selector_stats: HashMap<String, SelectorStats> = HashMap::new();
-
-    for (page_index, page_html) in pages.iter().enumerate() {
-        let document = Html::parse_document(page_html);
-
-        for element in document.select(&SELECTOR_ALL_ELEMENTS) {
-            if should_skip_element(&element) {
-                continue;
-            }
-            let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
-            if text.is_empty() {
-                continue;
-            }
-            let fingerprint = normalized_text_fingerprint(&text);
-            if fingerprint.is_empty() {
-                continue;
-            }
-            for selector in selector_candidates(&element) {
-                selector_stats
-                    .entry(selector)
-                    .or_insert_with(SelectorStats::new)
-                    .record(page_index, &fingerprint);
-            }
+    for entries in per_page {
+        for (selector, page_index, fingerprint) in entries {
+            selector_stats
+                .entry(selector)
+                .or_insert_with(SelectorStats::new)
+                .record(page_index, &fingerprint);
         }
     }
 

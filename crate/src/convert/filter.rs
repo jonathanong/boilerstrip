@@ -46,8 +46,8 @@ fn calculate_text_density_score(element: &ElementRef) -> i32 {
     let text: String = element.text().collect();
     let text_length = text.len() as i32;
 
-    let mut link_text_length = 0;
-    let mut link_count = 0;
+    let mut link_text_length = 0i32;
+    let mut link_count = 0i32;
     for link in element.select(&SELECTOR_A) {
         let link_text: String = link.text().collect();
         link_text_length += link_text.len() as i32;
@@ -55,6 +55,41 @@ fn calculate_text_density_score(element: &ElementRef) -> i32 {
     }
 
     text_length - link_text_length - (link_count * TEXT_DENSITY_LINK_PENALTY)
+}
+
+/// Remove `<a>` and `<button>` elements in-place on an already-parsed document.
+///
+/// Preferred over [`filter_links`] when the document is already available,
+/// as it avoids a serialization + re-parse round-trip.
+pub fn filter_links_inplace(
+    document: &mut Html,
+    link_text_content_to_remove: Option<&[String]>,
+    link_hrefs_to_remove: Option<&[String]>,
+) {
+    let ids: Vec<_> = document
+        .select(&SELECTOR_A_BUTTON)
+        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .map(|el| el.id())
+        .collect();
+    for id in ids {
+        if let Some(mut node) = document.tree.get_mut(id) {
+            node.detach();
+        }
+    }
+}
+
+fn should_remove_link(
+    el: &ElementRef<'_>,
+    link_text_content_to_remove: Option<&[String]>,
+    link_hrefs_to_remove: Option<&[String]>,
+) -> bool {
+    let text: String = el.text().collect();
+    let href = el.value().attr("href");
+    text.trim().is_empty()
+        || href.is_none()
+        || href.is_some_and(|h| h.starts_with('#'))
+        || should_remove_by_text(&text, link_text_content_to_remove)
+        || should_remove_by_href(href, link_hrefs_to_remove)
 }
 
 /// Remove `<a>` and `<button>` elements that are empty, anchor-only (`#`),
@@ -70,15 +105,7 @@ pub fn filter_links(
     let mut fragment = Html::parse_fragment(html);
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| {
-            let text: String = el.text().collect();
-            let href = el.value().attr("href");
-            text.trim().is_empty()
-                || href.is_none()
-                || href.is_some_and(|h| h.starts_with('#'))
-                || should_remove_by_text(&text, link_text_content_to_remove)
-                || should_remove_by_href(href, link_hrefs_to_remove)
-        })
+        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
         .map(|el| el.id())
         .collect();
     for id in ids {
