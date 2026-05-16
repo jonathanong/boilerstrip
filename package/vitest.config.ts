@@ -7,7 +7,6 @@ export default defineConfig({
       // index.js is auto-generated platform-dispatch code from napi build;
       // exclude it so coverage reflects only hand-written sources.
       exclude: ['index.js', '**/*.d.ts', 'vitest.config.ts', 'node_modules/**'],
-      include: ['src/**/*.ts'],
     },
   },
 })

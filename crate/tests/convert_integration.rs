@@ -53,3 +53,42 @@ fn tables_and_lists_conversion_succeeds() {
     assert!(result.content.contains("Comparison"));
     assert!(result.content.contains("Install the package") || result.content.contains("1."));
 }
+
+#[test]
+fn nested_tables_render_outer_table() {
+    let html = r#"<html><body><table>
+      <tr><td><table><tr><td>inner</td></tr></table></td><td>outer-cell</td></tr>
+    </table></body></html>"#;
+    let result = convert(html, &ConvertOptions::default());
+    assert!(
+        result.content.contains("outer-cell"),
+        "outer table cell should appear in output"
+    );
+}
+
+#[test]
+fn anchor_wrapping_image_preserves_linked_image() {
+    let html = r#"<html><body><main><a href="https://example.com"><img src="logo.png" alt="Logo"></a></main></body></html>"#;
+    let result = convert(html, &ConvertOptions::default());
+    // The linked image should produce something like [![Logo](logo.png)](https://example.com)
+    assert!(
+        result.content.contains("logo.png") || result.content.contains("Logo"),
+        "image inside anchor should be preserved"
+    );
+}
+
+#[test]
+fn deep_dom_does_not_stack_overflow() {
+    let depth = 1500usize;
+    let mut html = String::from("<html><body><main>");
+    for _ in 0..depth {
+        html.push_str("<div>");
+    }
+    html.push_str("deep content");
+    for _ in 0..depth {
+        html.push_str("</div>");
+    }
+    html.push_str("</main></body></html>");
+    // Must not panic or stack-overflow
+    let _result = convert(&html, &ConvertOptions::default());
+}

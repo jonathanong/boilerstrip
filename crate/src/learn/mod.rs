@@ -32,7 +32,7 @@ use rayon::prelude::*;
 use scraper::Html;
 use std::collections::{HashMap, HashSet};
 
-pub use apply::apply_removals;
+pub use apply::{apply_removals, apply_removals_compiled, CompiledRemovals};
 pub use types::{LearnError, LearnOptions, Removals};
 
 use constants::SELECTOR_ALL_ELEMENTS;
@@ -92,15 +92,25 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
         })
         .collect();
 
-    let mut selector_stats: HashMap<String, SelectorStats> = HashMap::new();
-    for entries in per_page {
-        for (selector, page_index, fingerprint) in entries {
-            selector_stats
-                .entry(selector)
-                .or_insert_with(SelectorStats::new)
-                .record(page_index, &fingerprint);
-        }
-    }
+    let selector_stats: HashMap<String, SelectorStats> = per_page
+        .into_par_iter()
+        .fold(
+            HashMap::new,
+            |mut acc: HashMap<String, SelectorStats>, entries| {
+                for (selector, page_index, fingerprint) in entries {
+                    acc.entry(selector)
+                        .or_insert_with(SelectorStats::new)
+                        .record(page_index, &fingerprint);
+                }
+                acc
+            },
+        )
+        .reduce(HashMap::new, |mut a, b| {
+            for (k, v) in b {
+                a.entry(k).or_insert_with(SelectorStats::new).merge(v);
+            }
+            a
+        });
 
     let boilerplate_patterns = resolve_boilerplate_patterns(options);
     let snippet_candidates = collect_breadth_first_snippet_candidates(

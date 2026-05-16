@@ -8,18 +8,18 @@ pub struct ConvertOptions {
     /// Boilerplate removals learned from a set of pages; applied before conversion.
     pub removals: Option<Removals>,
     /// CSS selectors whose matching elements are removed before conversion.
-    pub css_selectors_to_remove: Option<Vec<String>>,
+    pub css_selectors_to_remove: Vec<String>,
     /// CSS selectors that identify the main content root (first match wins).
-    pub content_selectors: Option<Vec<String>>,
+    pub content_selectors: Vec<String>,
     /// Link visible-text patterns whose matching `<a>`/`<button>` elements are removed.
-    pub link_text_content_to_remove: Option<Vec<String>>,
+    pub link_text_content_to_remove: Vec<String>,
     /// Link href prefixes whose matching elements are removed (e.g. `"javascript:"`).
-    pub link_hrefs_to_remove: Option<Vec<String>>,
+    pub link_hrefs_to_remove: Vec<String>,
     /// `<link rel="...">` tokens to exclude from the extracted `link` map.
-    pub link_rel_tokens_to_remove: Option<Vec<String>>,
+    pub link_rel_tokens_to_remove: Vec<String>,
     /// When `true`, use text-density scoring to locate the main content element
     /// instead of CSS selectors or semantic elements.
-    pub use_text_density_filter: Option<bool>,
+    pub use_text_density_filter: bool,
 }
 
 /// The result of converting a single HTML page.

@@ -127,8 +127,38 @@ describe('convert', () => {
     expect(result.title).toBe('My Page')
     expect(result.lang).toBe('en')
     expect(result.canonicalUrl).toBe('https://example.com/page')
-    expect((result.meta as Record<string, string>).description).toBe('A test page')
-    expect((result.link as Record<string, string>).me).toBe('https://example.com/author')
+    expect(result.meta.description).toBe('A test page')
+    expect(result.link.me).toBe('https://example.com/author')
+  })
+
+  it('rejects non-UTF-8 Buffer input', async () => {
+    const invalid = Buffer.from([0xff, 0xfe, 0x00])
+    await expect(convert(invalid)).rejects.toThrow()
+  })
+
+  it('preserves non-ASCII and emoji content', async () => {
+    const html = buf(
+      '<html><body><main><p>日本語テスト 🎉 مرحبا</p></main></body></html>',
+    )
+    const result = await convert(html)
+    expect(result.content).toContain('日本語テスト')
+    expect(result.content).toContain('🎉')
+    expect(result.content).toContain('مرحبا')
+  })
+
+  it('handles 50 concurrent convert calls', async () => {
+    const htmls = Array.from(
+      { length: 50 },
+      (_, i) =>
+        buf(
+          `<html><body><main><h1>Page ${i}</h1><p>Content for page number ${i}</p></main></body></html>`,
+        ),
+    )
+    const results = await Promise.all(htmls.map((h) => convert(h)))
+    expect(results).toHaveLength(50)
+    for (let i = 0; i < 50; i++) {
+      expect(results[i].content).toContain(`Page ${i}`)
+    }
   })
 })
 
@@ -149,6 +179,12 @@ describe('convertMany', () => {
   it('returns empty array for empty input', async () => {
     const results = await convertMany([])
     expect(results).toHaveLength(0)
+  })
+
+  it('rejects with indexed error when a buffer is invalid UTF-8', async () => {
+    const valid = buf('<html><body><p>ok</p></body></html>')
+    const invalid = Buffer.from([0xff, 0xfe])
+    await expect(convertMany([valid, invalid, valid])).rejects.toThrow(/convertMany\[1\]/)
   })
 
   it('applies shared options to all documents', async () => {

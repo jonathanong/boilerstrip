@@ -39,9 +39,7 @@ pub fn remove_by_css_selectors(html: &str, selectors: Option<&[String]>) -> Stri
         .flat_map(|sel| fragment.select(sel).map(|el| el.id()))
         .collect();
     for id in ids {
-        if let Some(mut node) = fragment.tree.get_mut(id) {
-            node.detach();
-        }
+        fragment.tree.get_mut(id).expect("BUG: collected node id not in tree").detach();
     }
     crate::util::serialize_fragment_body(&fragment)
 }

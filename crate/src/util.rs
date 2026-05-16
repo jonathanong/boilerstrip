@@ -19,22 +19,24 @@ pub(crate) fn remove_matching(
         .map(|el| el.id())
         .collect();
     for id in ids {
-        if let Some(mut node) = fragment.tree.get_mut(id) {
-            node.detach();
-        }
+        fragment.tree.get_mut(id).expect("BUG: collected node id not in tree").detach();
     }
     serialize_fragment_body(&fragment)
 }
 
 /// Serialize a parsed HTML fragment's body without the synthetic `<html>` wrapper.
-/// `Html::parse_fragment` wraps content in `<html>...</html>` — this strips those wrappers.
+/// `Html::parse_fragment` wraps content in an `<html>` element — this walks its
+/// children directly instead of stripping literal prefixes/suffixes.
 pub(crate) fn serialize_fragment_body(fragment: &scraper::Html) -> String {
-    let full_html = fragment.html();
-    let stripped = full_html.strip_prefix("<html>").unwrap_or(&full_html);
-    stripped
-        .strip_suffix("</html>")
-        .unwrap_or(stripped)
-        .to_string()
+    use scraper::Selector;
+    use std::sync::LazyLock;
+    static SELECTOR_HTML: LazyLock<Selector> =
+        LazyLock::new(|| Selector::parse("html").expect("BUG: invalid SELECTOR_HTML"));
+    fragment
+        .select(&SELECTOR_HTML)
+        .next()
+        .map(|html_el| html_el.inner_html())
+        .expect("BUG: Html::parse_fragment always produces an <html> root")
 }
 
 #[cfg(test)]

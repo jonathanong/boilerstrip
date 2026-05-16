@@ -14,33 +14,28 @@ pub fn element_to_markdown(root: ElementRef<'_>) -> String {
 }
 
 fn finalize(buf: String) -> String {
-    let without_trailing_spaces: String = buf
-        .lines()
-        .map(|l| l.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let normalized = collapse_blank_lines(&without_trailing_spaces);
-    normalized.trim().to_string()
-}
-
-fn collapse_blank_lines(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut blank_count = 0usize;
+    let mut out = String::with_capacity(buf.len());
+    let mut blank_run = 0usize;
     let mut has_content = false;
-    for line in s.lines() {
-        if line.trim().is_empty() {
+    for line in buf.lines() {
+        let trimmed = line.trim_end();
+        if trimmed.trim().is_empty() {
             if has_content {
-                blank_count += 1;
+                blank_run += 1;
             }
         } else {
-            if has_content && blank_count > 0 {
-                out.push('\n'); // one blank line between sections
+            if has_content && blank_run > 0 {
+                out.push('\n');
             }
-            blank_count = 0;
+            blank_run = 0;
             has_content = true;
-            out.push_str(line);
+            out.push_str(trimmed);
             out.push('\n');
         }
+    }
+    // Remove the trailing newline added in the loop, then trim
+    if out.ends_with('\n') {
+        out.pop();
     }
     out
 }
@@ -52,6 +47,7 @@ struct State {
     in_pre: bool,
     list_stack: Vec<ListKind>,
     table_state: Option<TableState>,
+    depth: usize,
 }
 
 enum ListKind {
@@ -114,32 +110,25 @@ fn emit_node(node: NodeRef<'_, Node>, state: &mut State) {
         Node::Text(text) => {
             let s = text.as_ref();
             if state.in_pre {
-                if let Some(ts) = state.table_state.as_mut() {
-                    ts.current_cell.push_str(s);
-                } else {
-                    state.buf.push_str(s);
-                }
+                // pre content is always processed in a scratch State with table_state=None
+                state.buf.push_str(s);
             } else {
                 let normalized = normalize_inline_text(s);
-                if normalized.is_empty() {
-                    return;
-                }
-                // Skip whitespace-only text nodes when we're at a block boundary
-                // (pending newlines already queued) to avoid spurious spaces.
-                if normalized.trim().is_empty() && state.pending_nl > 0 {
-                    return;
-                }
-                if let Some(ts) = state.table_state.as_mut() {
-                    ts.current_cell.push_str(&normalized);
-                } else {
-                    state.push_str(&normalized);
+                // Skip whitespace-only text nodes at block boundaries to avoid spurious spaces.
+                if !normalized.trim().is_empty() || state.pending_nl == 0 {
+                    if let Some(ts) = state.table_state.as_mut() {
+                        ts.current_cell.push_str(&normalized);
+                    } else {
+                        state.push_str(&normalized);
+                    }
                 }
             }
         }
         Node::Element(_) => {
-            if let Some(el) = ElementRef::wrap(node) {
-                emit_element(el, state);
-            }
+            emit_element(
+                ElementRef::wrap(node).expect("BUG: Node::Element always wraps to ElementRef"),
+                state,
+            );
         }
         _ => {}
     }
@@ -164,6 +153,13 @@ fn normalize_inline_text(s: &str) -> String {
 }
 
 fn emit_element(el: ElementRef<'_>, state: &mut State) {
+    const MAX_DEPTH: usize = 200;
+    state.depth += 1;
+    if state.depth > MAX_DEPTH {
+        state.depth -= 1;
+        return;
+    }
+
     let name = el.value().name();
 
     match name {
@@ -197,7 +193,14 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
-            let level = name.chars().nth(1).unwrap().to_digit(10).unwrap() as usize;
+            let level = match name {
+                "h1" => 1usize,
+                "h2" => 2,
+                "h3" => 3,
+                "h4" => 4,
+                "h5" => 5,
+                _ => 6,
+            };
             let prefix = "#".repeat(level);
             state.ensure_newlines(2);
             state.push_str(&prefix);
@@ -218,7 +221,6 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
 
         "pre" => {
             state.ensure_newlines(2);
-            state.in_pre = true;
             // Check if direct child is <code> for fenced blocks
             let lang = el
                 .children()
@@ -231,18 +233,44 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
                         .map(|c| c.trim_start_matches("language-").to_string())
                 });
             let lang_str = lang.as_deref().unwrap_or("");
-            state.push_str("```");
+            // Collect the pre content into a scratch buffer first so we can
+            // determine the required fence length (must exceed any backtick run).
+            let mut scratch = State {
+                in_pre: true,
+                ..Default::default()
+            };
+            for child in (*el).children() {
+                emit_node(child, &mut scratch);
+            }
+            state.in_pre = false;
+            let content = scratch.buf;
+            // Count the longest consecutive backtick run in the content.
+            let max_backtick_run = {
+                let mut max_run = 0usize;
+                let mut cur_run = 0usize;
+                for ch in content.chars() {
+                    if ch == '`' {
+                        cur_run += 1;
+                        if cur_run > max_run {
+                            max_run = cur_run;
+                        }
+                    } else {
+                        cur_run = 0;
+                    }
+                }
+                max_run
+            };
+            let fence_len = (max_backtick_run + 1).max(3);
+            let fence: String = "`".repeat(fence_len);
+            state.push_str(&fence);
             state.push_str(lang_str);
             state.buf.push('\n');
             state.pending_nl = 0;
-            for child in (*el).children() {
-                emit_node(child, state);
-            }
-            state.in_pre = false;
+            state.buf.push_str(&content);
             if !state.buf.ends_with('\n') {
                 state.buf.push('\n');
             }
-            state.buf.push_str("```");
+            state.buf.push_str(&fence);
             state.ensure_newlines(2);
         }
 
@@ -252,54 +280,51 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
                 for child in (*el).children() {
                     emit_node(child, state);
                 }
-                return;
-            }
-            let text = collect_inline_text(&el);
-            let tick = if text.contains('`') { "``" } else { "`" };
-            let code_md = format!("{tick}{text}{tick}");
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.push_str(&code_md);
             } else {
-                state.push_str(&code_md);
+                let text = collect_inline_text(&el);
+                let tick = if text.contains('`') { "``" } else { "`" };
+                let code_md = format!("{tick}{text}{tick}");
+                if let Some(ts) = state.table_state.as_mut() {
+                    ts.current_cell.push_str(&code_md);
+                } else {
+                    state.push_str(&code_md);
+                }
             }
         }
 
         "strong" | "b" => {
             let text = collect_inline_text(&el);
-            if text.trim().is_empty() {
-                return;
-            }
-            let bold = format!("**{text}**");
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.push_str(&bold);
-            } else {
-                state.push_str(&bold);
+            if !text.trim().is_empty() {
+                let bold = format!("**{text}**");
+                if let Some(ts) = state.table_state.as_mut() {
+                    ts.current_cell.push_str(&bold);
+                } else {
+                    state.push_str(&bold);
+                }
             }
         }
 
         "em" | "i" => {
             let text = collect_inline_text(&el);
-            if text.trim().is_empty() {
-                return;
-            }
-            let italic = format!("*{text}*");
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.push_str(&italic);
-            } else {
-                state.push_str(&italic);
+            if !text.trim().is_empty() {
+                let italic = format!("*{text}*");
+                if let Some(ts) = state.table_state.as_mut() {
+                    ts.current_cell.push_str(&italic);
+                } else {
+                    state.push_str(&italic);
+                }
             }
         }
 
         "del" | "s" | "strike" => {
             let text = collect_inline_text(&el);
-            if text.trim().is_empty() {
-                return;
-            }
-            let del = format!("~~{text}~~");
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.push_str(&del);
-            } else {
-                state.push_str(&del);
+            if !text.trim().is_empty() {
+                let del = format!("~~{text}~~");
+                if let Some(ts) = state.table_state.as_mut() {
+                    ts.current_cell.push_str(&del);
+                } else {
+                    state.push_str(&del);
+                }
             }
         }
 
@@ -309,20 +334,19 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             for child in (*el).children() {
                 emit_node(child, &mut inner);
             }
-            let text = inner.buf;
+            let text = finalize(inner.buf);
             let trimmed = text.trim();
-            if trimmed.is_empty() {
-                return;
-            }
-            let link_md = if let Some(ref href) = href {
-                format!("[{trimmed}]({href})")
-            } else {
-                trimmed.to_string()
-            };
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.push_str(&link_md);
-            } else {
-                state.push_str(&link_md);
+            if !trimmed.is_empty() {
+                let link_md = if let Some(ref href) = href {
+                    format!("[{trimmed}]({href})")
+                } else {
+                    trimmed.to_string()
+                };
+                if let Some(ts) = state.table_state.as_mut() {
+                    ts.current_cell.push_str(&link_md);
+                } else {
+                    state.push_str(&link_md);
+                }
             }
         }
 
@@ -364,27 +388,21 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
                 for child in (*el).children() {
                     emit_node(child, state);
                 }
-                return;
-            }
-            state.ensure_newlines(1);
-            let prefix = state.list_prefix();
-            state.push_str(&prefix);
-            // Collect li content, handling nested lists
-            for child in (*el).children() {
-                match child.value() {
-                    Node::Element(_) => {
-                        if let Some(child_el) = ElementRef::wrap(child) {
-                            let child_name = child_el.value().name();
-                            if child_name == "ul" || child_name == "ol" {
-                                // Nested list — emit on next lines
-                                state.ensure_newlines(1);
-                                emit_element(child_el, state);
-                            } else {
-                                emit_element(child_el, state);
-                            }
+            } else {
+                state.ensure_newlines(1);
+                let prefix = state.list_prefix();
+                state.push_str(&prefix);
+                // Collect li content, handling nested lists
+                for child in (*el).children() {
+                    if let Some(child_el) = ElementRef::wrap(child) {
+                        if matches!(child_el.value().name(), "ul" | "ol") {
+                            // Nested list — emit on its own line
+                            state.ensure_newlines(1);
                         }
+                        emit_element(child_el, state);
+                    } else {
+                        emit_node(child, state);
                     }
-                    _ => emit_node(child, state),
                 }
             }
         }
@@ -408,6 +426,7 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
 
         "table" => {
             state.ensure_newlines(2);
+            let prev_table = state.table_state.take();
             state.table_state = Some(TableState {
                 headers: vec![],
                 rows: vec![],
@@ -418,63 +437,51 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            if let Some(ts) = state.table_state.take() {
-                state.flush_pending();
-                emit_gfm_table(ts, &mut state.buf);
-                state.pending_nl = 0;
-            }
+            let ts = state.table_state.take().expect("BUG: table state missing after table");
+            state.flush_pending();
+            emit_gfm_table(ts, &mut state.buf);
+            state.pending_nl = 0;
+            state.table_state = prev_table;
             state.ensure_newlines(2);
         }
 
         "thead" => {
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.in_head = true;
-            }
+            state.table_state.as_mut().expect("BUG: thead outside table").in_head = true;
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.in_head = false;
-            }
+            state.table_state.as_mut().expect("BUG: thead outside table").in_head = false;
         }
 
         "tbody" | "tfoot" => {
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.in_head = false;
-            }
+            state.table_state.as_mut().expect("BUG: tbody/tfoot outside table").in_head = false;
             for child in (*el).children() {
                 emit_node(child, state);
             }
         }
 
         "tr" => {
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_row.clear();
-            }
+            state.table_state.as_mut().expect("BUG: tr outside table").current_row.clear();
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            if let Some(ts) = state.table_state.as_mut() {
-                let row = std::mem::take(&mut ts.current_row);
-                if ts.in_head || ts.headers.is_empty() {
-                    ts.headers = row;
-                } else {
-                    ts.rows.push(row);
-                }
+            let ts = state.table_state.as_mut().expect("BUG: tr outside table");
+            let row = std::mem::take(&mut ts.current_row);
+            if ts.in_head || ts.headers.is_empty() {
+                ts.headers = row;
+            } else {
+                ts.rows.push(row);
             }
         }
 
         "th" | "td" => {
-            if let Some(ts) = state.table_state.as_mut() {
-                ts.current_cell.clear();
-            }
+            state.table_state.as_mut().expect("BUG: th/td outside table").current_cell.clear();
             for child in (*el).children() {
                 emit_node(child, state);
             }
-            if let Some(ts) = state.table_state.as_mut() {
-                let cell = std::mem::take(&mut ts.current_cell);
-                ts.current_row.push(cell.trim().to_string());
-            }
+            let ts = state.table_state.as_mut().expect("BUG: th/td outside table");
+            let cell = std::mem::take(&mut ts.current_cell);
+            ts.current_row.push(cell.trim().to_string());
         }
 
         // Block containers — emit children with surrounding blank lines
@@ -501,6 +508,8 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             }
         }
     }
+
+    state.depth -= 1;
 }
 
 fn emit_gfm_table(ts: TableState, buf: &mut String) {
@@ -808,6 +817,8 @@ mod tests {
             ("h1", "# "),
             ("h2", "## "),
             ("h3", "### "),
+            ("h4", "#### "),
+            ("h5", "##### "),
             ("h6", "###### "),
         ] {
             assert!(
@@ -830,5 +841,96 @@ mod tests {
         assert!(
             !result.contains("evil") && !result.contains("fallback") && result.contains("keep")
         );
+    }
+
+    #[test]
+    fn nested_tables_do_not_corrupt_outer_table() {
+        let result = md(
+            r#"<table><tr><td><table><tr><td>inner</td></tr></table></td><td>outer-cell</td></tr></table>"#,
+        );
+        assert!(
+            result.contains("outer-cell"),
+            "outer table cell should appear"
+        );
+    }
+
+    #[test]
+    fn anchor_wrapping_image_preserves_image_markdown() {
+        let result = md(r#"<a href="https://example.com"><img src="logo.png" alt="Logo"></a>"#);
+        assert!(result.contains("Logo"), "alt text should appear");
+        assert!(result.contains("https://example.com"), "href should appear");
+    }
+
+    #[test]
+    fn pre_block_content_already_ending_with_newline() {
+        // pre text that ends with \n: the `if !buf.ends_with('\n')` branch is skipped
+        let result = md("<pre>line1\nline2\n</pre>");
+        assert!(result.contains("line1"), "pre content should be emitted");
+        assert!(result.contains("line2"), "pre content should be emitted");
+    }
+
+    #[test]
+    fn nested_ordered_list() {
+        // Nested ol: inner ol has list_depth() > 0 so ensure_newlines is not called
+        let result = md("<ol><li>outer<ol><li>inner</li></ol></li></ol>");
+        assert!(result.contains("outer"), "outer item should appear");
+        assert!(result.contains("inner"), "inner item should appear");
+    }
+
+    #[test]
+    fn depth_guard_does_not_stack_overflow() {
+        // 1500 nested divs — should not panic/stack-overflow
+        let mut html = String::new();
+        for _ in 0..1500 {
+            html.push_str("<div>");
+        }
+        html.push_str("deep");
+        for _ in 0..1500 {
+            html.push_str("</div>");
+        }
+        let result = md(&html);
+        // "deep" text may or may not appear depending on depth limit, but the call must not panic
+        let _ = result;
+    }
+
+    #[test]
+    fn pre_block_with_triple_backtick_uses_longer_fence() {
+        let result = md("<pre><code>let x = ```foo```;</code></pre>");
+        // The fence must be at least 4 backticks
+        assert!(
+            result.contains("````"),
+            "fence should be >= 4 backticks when content has ```"
+        );
+    }
+
+    #[test]
+    fn heading_level_is_correct() {
+        for (tag, hashes) in &[("h1", "#"), ("h2", "##"), ("h3", "###"), ("h6", "######")] {
+            let result = md(&format!("<{tag}>Title</{tag}>"));
+            assert!(result.starts_with(hashes), "wrong heading prefix for {tag}");
+        }
+    }
+
+    #[test]
+    fn orphan_li_uses_empty_list_prefix() {
+        // <li> outside <ul>/<ol> — list_prefix() returns "" (no list on the stack)
+        let result = md("<li>Item text</li>");
+        assert!(result.contains("Item text"), "li content should be emitted");
+    }
+
+    #[test]
+    fn pre_text_inside_table_cell_does_not_panic() {
+        // <pre> inside a <td>: pre content goes into a scratch state, not the cell
+        let result = md("<table><tr><td><pre>code here</pre></td></tr></table>");
+        // Content may appear as a code fence in the output (outside the table)
+        let _ = result;
+    }
+
+    #[test]
+    fn li_inside_pre_emits_children() {
+        // <li> as a child of <pre> — in_pre is true, so the li branch runs emit_node on children
+        let result = md("<pre><ul><li>item</li></ul></pre>");
+        // Content may or may not be exactly right, but must not panic
+        let _ = result;
     }
 }

@@ -1,4 +1,5 @@
 use regex::Regex;
+use scraper::Selector;
 use std::sync::LazyLock;
 
 use super::types::Removals;
@@ -22,6 +23,60 @@ pub fn apply_removals(html: &str, removals: &Removals) -> String {
     }
     if !removals.html_to_remove.is_empty() {
         cleaned = apply_html_snippet_removals(&cleaned, &removals.html_to_remove);
+    }
+
+    cleaned.trim().to_string()
+}
+
+/// Pre-compiled form of [`Removals`] for efficient batch application.
+///
+/// Build once from a `Removals`, then call [`apply_removals_compiled`] for each
+/// page without recompiling selectors or regexes.
+pub struct CompiledRemovals {
+    pub(crate) selectors: Vec<Selector>,
+    pub(crate) snippet_regexes: Vec<(String, regex::Regex)>,
+}
+
+impl CompiledRemovals {
+    pub fn new(removals: &Removals) -> Self {
+        let selectors = removals
+            .css_selectors_to_remove
+            .iter()
+            .filter_map(|s| Selector::parse(s).ok())
+            .collect();
+        let mut sorted_snippets = removals.html_to_remove.clone();
+        sorted_snippets.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+        let snippet_regexes = sorted_snippets
+            .iter()
+            .filter(|s| !s.trim().is_empty())
+            .filter_map(|s| build_snippet_regex(s).map(|re| (normalize_whitespace(s), re)))
+            .collect();
+        Self {
+            selectors,
+            snippet_regexes,
+        }
+    }
+}
+
+/// Apply pre-compiled removals to an HTML string.
+pub fn apply_removals_compiled(html: &str, compiled: &CompiledRemovals) -> String {
+    let mut cleaned = if compiled.selectors.is_empty() {
+        html.to_string()
+    } else {
+        crate::util::remove_matching(html, |el| {
+            compiled.selectors.iter().any(|sel| sel.matches(el))
+        })
+    };
+
+    if !compiled.snippet_regexes.is_empty() {
+        let mut normalized_cleaned = normalize_whitespace(&cleaned);
+        for (normalized_snippet, re) in &compiled.snippet_regexes {
+            if normalized_cleaned.contains(normalized_snippet.as_str()) {
+                let next = re.replace_all(&cleaned, "").to_string();
+                normalized_cleaned = normalize_whitespace(&next);
+                cleaned = next;
+            }
+        }
     }
 
     cleaned.trim().to_string()
@@ -52,10 +107,8 @@ pub(crate) fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> St
     for (normalized_snippet, re) in &compiled {
         if normalized_cleaned.contains(normalized_snippet.as_str()) {
             let next = re.replace_all(&cleaned, "").to_string();
-            if next != cleaned {
-                normalized_cleaned = normalize_whitespace(&next);
-                cleaned = next;
-            }
+            normalized_cleaned = normalize_whitespace(&next);
+            cleaned = next;
         }
     }
 
@@ -180,6 +233,67 @@ mod tests {
         };
         let html = "<p>Different content entirely</p>";
         let result = apply_removals(html, &removals);
+        assert_eq!(result, html);
+    }
+
+    #[test]
+    fn compiled_removals_applies_css_and_snippets() {
+        let removals = Removals {
+            css_selectors_to_remove: vec!["nav".to_string()],
+            html_to_remove: vec!["<p>Footer</p>".to_string()],
+        };
+        let compiled = CompiledRemovals::new(&removals);
+        let html = "<nav>Menu</nav><p>Footer</p><main>Content</main>";
+        let result = apply_removals_compiled(html, &compiled);
+        assert!(!result.contains("Menu"));
+        assert!(!result.contains("Footer"));
+        assert!(result.contains("Content"));
+    }
+
+    #[test]
+    fn compiled_removals_with_empty_removals_returns_trimmed() {
+        let removals = Removals::default();
+        let compiled = CompiledRemovals::new(&removals);
+        let result = apply_removals_compiled("  <p>hello</p>  ", &compiled);
+        assert_eq!(result, "<p>hello</p>");
+    }
+
+    #[test]
+    fn compiled_removals_skips_invalid_css_selector() {
+        let removals = Removals {
+            css_selectors_to_remove: vec!["[".to_string()],
+            html_to_remove: vec![],
+        };
+        let compiled = CompiledRemovals::new(&removals);
+        let result = apply_removals_compiled("<p>Keep</p>", &compiled);
+        assert_eq!(result, "<p>Keep</p>");
+    }
+
+    #[test]
+    fn compiled_removals_sorts_equal_length_snippets_lexically() {
+        // Two same-length snippets trigger the then_with lexical tiebreak in sort_by
+        let removals = Removals {
+            css_selectors_to_remove: vec![],
+            html_to_remove: vec!["<p>aaa</p>".to_string(), "<p>bbb</p>".to_string()],
+        };
+        let compiled = CompiledRemovals::new(&removals);
+        let html = "<p>aaa</p><p>bbb</p><p>Keep</p>";
+        let result = apply_removals_compiled(html, &compiled);
+        assert!(!result.contains("aaa"));
+        assert!(!result.contains("bbb"));
+        assert!(result.contains("Keep"));
+    }
+
+    #[test]
+    fn compiled_removals_skips_snippet_not_in_html() {
+        // Snippet in compiled removals that doesn't appear in the HTML — if-body skipped
+        let removals = Removals {
+            css_selectors_to_remove: vec![],
+            html_to_remove: vec!["<p>Missing snippet</p>".to_string()],
+        };
+        let compiled = CompiledRemovals::new(&removals);
+        let html = "<p>Different content</p>";
+        let result = apply_removals_compiled(html, &compiled);
         assert_eq!(result, html);
     }
 }

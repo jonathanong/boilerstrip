@@ -37,14 +37,14 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     if let Some(removals) = &options.removals {
         remove_selectors.extend(removals.css_selectors_to_remove.iter().cloned());
     }
-    if let Some(sels) = &options.css_selectors_to_remove {
-        remove_selectors.extend(sels.iter().cloned());
-    }
+    remove_selectors.extend(options.css_selectors_to_remove.iter().cloned());
 
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
     let stripped_bytes = strip::strip_elements(html, &remove_selectors);
-    let mut working_html = String::from_utf8(stripped_bytes)
-        .expect("BUG: lol_html produced invalid UTF-8 from valid UTF-8 input");
+    // SAFETY: input was already &str (valid UTF-8); lol_html only removes whole
+    // elements and their content, never splits a multi-byte sequence, so the
+    // output is still valid UTF-8.
+    let mut working_html = unsafe { String::from_utf8_unchecked(stripped_bytes) };
 
     // Phase 1b — text-based snippet removal (regex, O(n)).
     if let Some(removals) = &options.removals {
@@ -59,22 +59,32 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     // Extract metadata from this already-stripped DOM (title/meta/link still present).
     let title = parser::extract_title(&document);
     let meta = parser::extract_meta_tags(&document);
-    let link = parser::extract_link_tags(&document, options.link_rel_tokens_to_remove.as_deref());
+    let link_rel_filter = if options.link_rel_tokens_to_remove.is_empty() {
+        None
+    } else {
+        Some(options.link_rel_tokens_to_remove.as_slice())
+    };
+    let link = parser::extract_link_tags(&document, link_rel_filter);
     let canonical_url = parser::extract_canonical_url(&document);
     let lang = parser::extract_lang(&document);
 
     // Filter links in-place (no re-parse).
     filter::filter_links_inplace(
         &mut document,
-        options.link_text_content_to_remove.as_deref(),
-        options.link_hrefs_to_remove.as_deref(),
+        &options.link_text_content_to_remove,
+        &options.link_hrefs_to_remove,
     );
 
     // Select content root.
-    let content_root = if options.use_text_density_filter == Some(true) {
+    let content_selectors_opt = if options.content_selectors.is_empty() {
+        None
+    } else {
+        Some(options.content_selectors.as_slice())
+    };
+    let content_root = if options.use_text_density_filter {
         filter::apply_text_density_filter(&document)
     } else {
-        selector::select_content_root(&document, options.content_selectors.as_deref())
+        selector::select_content_root(&document, content_selectors_opt)
     };
 
     // Emit Markdown via custom tree walker (no additional parse).
@@ -131,7 +141,7 @@ mod tests {
     fn convert_uses_text_density_filter() {
         let html = "<html><body><nav><a href=\"/x\">Link</a></nav><article>Long prose article text that should win.</article></body></html>";
         let options = ConvertOptions {
-            use_text_density_filter: Some(true),
+            use_text_density_filter: true,
             ..Default::default()
         };
         let result = convert(html, &options);
@@ -153,7 +163,7 @@ mod tests {
     fn convert_strips_via_css_selectors_option() {
         let html = "<html><body><nav class=\"nav\">Menu</nav><p>Content</p></body></html>";
         let options = ConvertOptions {
-            css_selectors_to_remove: Some(vec![".nav".to_string()]),
+            css_selectors_to_remove: vec![".nav".to_string()],
             ..Default::default()
         };
         let result = convert(html, &options);
@@ -180,7 +190,7 @@ mod tests {
     fn convert_removes_links_by_href_prefix() {
         let html = "<html><body><main><a href=\"javascript:void(0)\">JS</a><a href=\"/safe\">Safe</a></main></body></html>";
         let options = ConvertOptions {
-            link_hrefs_to_remove: Some(vec!["javascript:".to_string()]),
+            link_hrefs_to_remove: vec!["javascript:".to_string()],
             ..Default::default()
         };
         let result = convert(html, &options);
@@ -191,11 +201,35 @@ mod tests {
     fn convert_removes_links_by_text_content() {
         let html = "<html><body><main><a href=\"/close\">Close</a><a href=\"/keep\">Keep</a></main></body></html>";
         let options = ConvertOptions {
-            link_text_content_to_remove: Some(vec!["close".to_string()]),
+            link_text_content_to_remove: vec!["close".to_string()],
             ..Default::default()
         };
         let result = convert(html, &options);
         assert!(!result.content.contains("Close") && result.content.contains("Keep"));
+    }
+
+    #[test]
+    fn convert_filters_link_rel_tokens() {
+        let html = r#"<html><head><link rel="me" href="https://example.com/author"><link rel="canonical" href="https://example.com/page"></head><body><p>hi</p></body></html>"#;
+        let options = ConvertOptions {
+            link_rel_tokens_to_remove: vec!["me".to_string()],
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(result.link.get("me").is_none(), "me link should be filtered out");
+        assert!(result.link.get("canonical").is_some(), "canonical link should remain");
+    }
+
+    #[test]
+    fn convert_uses_content_selectors() {
+        let html = "<html><body><nav>Nav</nav><article><h1>Article</h1></article></body></html>";
+        let options = ConvertOptions {
+            content_selectors: vec!["article".to_string()],
+            ..Default::default()
+        };
+        let result = convert(html, &options);
+        assert!(result.content.contains("Article"), "article content should be selected");
+        assert!(!result.content.contains("Nav"), "nav should be excluded");
     }
 
     #[test]
@@ -210,7 +244,7 @@ mod tests {
                 css_selectors_to_remove: vec![".site-footer".to_string()],
                 html_to_remove: vec![],
             }),
-            use_text_density_filter: Some(true),
+            use_text_density_filter: true,
             ..Default::default()
         };
         let result = convert(&html, &options);

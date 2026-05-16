@@ -12,23 +12,50 @@ pub(super) fn selector_candidates(element: &ElementRef) -> HashSet<String> {
 
     if let Some(id_value) = element.value().id() {
         if is_stable_selector_token(id_value) {
-            selectors.insert(format!("#{id_value}"));
+            selectors.insert(format!("#{}", css_escape_identifier(id_value)));
         }
     }
 
     for class_name in element.value().classes() {
         if is_stable_selector_token(class_name) {
-            selectors.insert(format!(".{class_name}"));
+            selectors.insert(format!(".{}", css_escape_identifier(class_name)));
         }
     }
 
     if let Some(role) = element.value().attr("role") {
         if is_stable_selector_token(role) {
+            // Role values go in attribute selectors; no escaping needed for the value
+            // (it's a quoted string, not an identifier).
             selectors.insert(format!(r#"[role="{role}"]"#));
         }
     }
 
     selectors
+}
+
+/// Escape a value for use in a CSS selector (class name or ID).
+/// Escapes characters that are valid in HTML attributes but need `\` in CSS selectors.
+fn css_escape_identifier(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 8);
+    for (i, ch) in value.char_indices() {
+        match ch {
+            // First character: digit must be escaped as \3X  (or unicode escape)
+            // Actually, use numeric escape for leading digit: \XX
+            _ if i == 0 && ch.is_ascii_digit() => {
+                out.push('\\');
+                out.push_str(&format!("{:X} ", ch as u32));
+            }
+            // Special chars that need backslash-escaping in CSS identifiers
+            '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '.' | '/'
+            | ':' | ';' | '<' | '=' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '`' | '{'
+            | '|' | '}' | '~' => {
+                out.push('\\');
+                out.push(ch);
+            }
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 pub(super) fn selector_priority(selector: &str) -> usize {
@@ -51,9 +78,11 @@ pub(super) fn is_stable_selector_token(value: &str) -> bool {
     if !value.chars().any(|ch| ch.is_alphabetic()) {
         return false;
     }
+    // Accept alphanumeric, hyphen, underscore, colon, slash, brackets, period
+    // (covers Tailwind/utility-CSS class names like `md:hidden`, `w-1/2`)
     if !value
         .chars()
-        .all(|ch| ch.is_alphanumeric() || ch == '-' || ch == '_')
+        .all(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '_' | ':' | '/' | '[' | ']' | '.'))
     {
         return false;
     }
@@ -241,6 +270,33 @@ mod tests {
             ),
             vec![".a".to_string(), ".b".to_string()]
         );
+    }
+
+    #[test]
+    fn tailwind_class_names_are_accepted_with_escaping() {
+        let doc = Html::parse_fragment(r#"<div class="md:hidden hover:text-blue-500"></div>"#);
+        let el = doc
+            .select(&scraper::Selector::parse("div").unwrap())
+            .next()
+            .unwrap();
+        let selectors = selector_candidates(&el);
+        // Both Tailwind classes should be in candidates (broadened filter)
+        assert!(
+            selectors.iter().any(|s| s.contains("md")),
+            "md:hidden should be included"
+        );
+    }
+
+    #[test]
+    fn css_escape_identifier_escapes_colon_and_slash() {
+        assert_eq!(css_escape_identifier("md:hidden"), "md\\:hidden");
+        assert_eq!(css_escape_identifier("w-1/2"), "w-1\\/2");
+    }
+
+    #[test]
+    fn css_escape_identifier_escapes_leading_digit() {
+        let result = css_escape_identifier("4col");
+        assert!(result.starts_with('\\'), "leading digit should be escaped");
     }
 
     #[test]
