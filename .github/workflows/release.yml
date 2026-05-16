@@ -144,14 +144,8 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-slim
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            musl: true
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
-            musl: true
           - os: windows-2025
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
@@ -183,14 +177,6 @@ jobs:
         with:
           version: 11
 
-      - name: Install cargo-zigbuild
-        if: matrix.musl
-        uses: taiki-e/install-action@cargo-zigbuild
-
-      - name: Install zig
-        if: matrix.musl
-        run: pip3 install ziglang
-
       - name: Install dependencies
         working-directory: package
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -198,7 +184,7 @@ jobs:
       - name: Build native module
         working-directory: package
         shell: bash
-        run: pnpm exec napi build --platform --release --target ${{ matrix.target }} ${{ matrix.musl && '--zig' || '' }}
+        run: pnpm exec napi build --platform --release --target ${{ matrix.target }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
