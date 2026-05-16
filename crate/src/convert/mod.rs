@@ -43,7 +43,8 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
 
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
     let stripped_bytes = strip::strip_elements(html, &remove_selectors);
-    let mut working_html = String::from_utf8_lossy(&stripped_bytes).into_owned();
+    let mut working_html = String::from_utf8(stripped_bytes)
+        .expect("BUG: lol_html produced invalid UTF-8 from valid UTF-8 input");
 
     // Phase 1b — text-based snippet removal (regex, O(n)).
     if let Some(removals) = &options.removals {

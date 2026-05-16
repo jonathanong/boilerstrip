@@ -202,8 +202,9 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             state.ensure_newlines(2);
             state.push_str(&prefix);
             state.push_str(" ");
-            let text = collect_inline_text(&el);
-            state.push_str(text.trim());
+            for child in (*el).children() {
+                emit_node(child, state);
+            }
             state.ensure_newlines(2);
         }
 
@@ -303,13 +304,17 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         }
 
         "a" => {
-            let href = el.value().attr("href");
-            let text = collect_inline_text(&el);
+            let href = el.value().attr("href").map(str::to_owned);
+            let mut inner = State::default();
+            for child in (*el).children() {
+                emit_node(child, &mut inner);
+            }
+            let text = inner.buf;
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 return;
             }
-            let link_md = if let Some(href) = href {
+            let link_md = if let Some(ref href) = href {
                 format!("[{trimmed}]({href})")
             } else {
                 trimmed.to_string()
@@ -414,6 +419,7 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
                 emit_node(child, state);
             }
             if let Some(ts) = state.table_state.take() {
+                state.flush_pending();
                 emit_gfm_table(ts, &mut state.buf);
                 state.pending_nl = 0;
             }

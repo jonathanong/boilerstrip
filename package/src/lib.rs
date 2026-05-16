@@ -136,16 +136,17 @@ impl Task for LearnTask {
     type JsValue = Removals;
 
     fn compute(&mut self) -> napi::Result<Self::Output> {
-        let pages: Vec<&str> = self
+        let pages = self
             .pages
             .iter()
-            .map(|b| std::str::from_utf8(b).map_err(|e| napi::Error::from_reason(e.to_string())))
-            .collect::<napi::Result<_>>()?;
-        boilerstrip::learn(
-            &pages.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            &self.options,
-        )
-        .map_err(|e| napi::Error::from_reason(e.to_string()))
+            .map(|b| {
+                std::str::from_utf8(b)
+                    .map(str::to_owned)
+                    .map_err(|e| napi::Error::from_reason(e.to_string()))
+            })
+            .collect::<napi::Result<Vec<_>>>()?;
+        boilerstrip::learn(&pages, &self.options)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
