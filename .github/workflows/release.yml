@@ -103,12 +103,14 @@ jobs:
           node -e "
             const fs = require('node:fs');
             const version = process.argv[1];
-            const cargo = fs.readFileSync('crate/Cargo.toml', 'utf8')
-              .replace(/^version = \".*\"$/m, \`version = \"\${version}\"\`);
-            fs.writeFileSync('crate/Cargo.toml', cargo);
+            for (const path of ['crate/Cargo.toml', 'package/Cargo.toml']) {
+              const cargo = fs.readFileSync(path, 'utf8')
+                .replace(/^version = \".*\"$/m, \`version = \"\${version}\"\`);
+              fs.writeFileSync(path, cargo);
+            }
           " "$version"
           cargo update -w
-          git add crate/Cargo.toml Cargo.lock package/package.json
+          git add crate/Cargo.toml package/Cargo.toml Cargo.lock package/package.json
           git commit -m "chore(release): v$version"
           git tag -a "v$version" -m "v$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -255,7 +257,11 @@ jobs:
         run: |
           set -euo pipefail
           tag="v${{ needs.prepare.outputs.version }}"
-          gh release create "$tag" --title "$tag" --generate-notes
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; skipping"
+          else
+            gh release create "$tag" --title "$tag" --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
