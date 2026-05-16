@@ -110,6 +110,7 @@ describe('convert', () => {
         <title>My Page</title>
         <meta name="description" content="A test page" />
         <link rel="canonical" href="https://example.com/page" />
+        <link rel="me" href="https://example.com/author" />
       </head>
       <body><main><p>Content here</p></main></body>
     </html>`
@@ -118,5 +119,6 @@ describe('convert', () => {
     expect(result.lang).toBe('en')
     expect(result.canonicalUrl).toBe('https://example.com/page')
     expect((result.meta as Record<string, string>).description).toBe('A test page')
+    expect((result.link as Record<string, string>).me).toBe('https://example.com/author')
   })
 })
