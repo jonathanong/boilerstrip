@@ -1,7 +1,10 @@
 #![deny(clippy::all)]
 
 use boilerstrip::{ConvertOptions as RustConvertOptions, LearnOptions as RustLearnOptions};
+use napi::bindgen_prelude::AsyncTask;
+use napi::{Env, Task};
 use napi_derive::napi;
+use serde_json::Value;
 
 #[napi(object)]
 pub struct Removals {
@@ -91,16 +94,86 @@ impl From<ConvertOptions> for RustConvertOptions {
     }
 }
 
-#[napi]
-pub fn learn(pages: Vec<String>, options: Option<LearnOptions>) -> napi::Result<Removals> {
-    let rust_options = options.map(RustLearnOptions::from).unwrap_or_default();
-    boilerstrip::learn(&pages, &rust_options)
-        .map(Removals::from)
-        .map_err(|e| napi::Error::from_reason(e.to_string()))
+#[napi(object)]
+pub struct ConvertResult {
+    /// Page title from `<title>`.
+    pub title: Option<String>,
+    /// `<meta name/property>` map as a plain object.
+    pub meta: Value,
+    /// `<link rel>` map as a plain object.
+    pub link: Value,
+    /// Cleaned Markdown content.
+    pub content: String,
+    /// Canonical URL from `<link rel="canonical">`.
+    pub canonical_url: Option<String>,
+    /// Language code from `<html lang="...">`.
+    pub lang: Option<String>,
 }
 
-#[napi]
-pub fn convert(html: String, options: Option<ConvertOptions>) -> String {
+impl From<boilerstrip::ConvertResult> for ConvertResult {
+    fn from(r: boilerstrip::ConvertResult) -> Self {
+        Self {
+            title: r.title,
+            meta: Value::Object(r.meta),
+            link: Value::Object(r.link),
+            content: r.content,
+            canonical_url: r.canonical_url,
+            lang: r.lang,
+        }
+    }
+}
+
+pub struct LearnTask {
+    pages: Vec<String>,
+    options: RustLearnOptions,
+}
+
+impl Task for LearnTask {
+    type Output = boilerstrip::Removals;
+    type JsValue = Removals;
+
+    fn compute(&mut self) -> napi::Result<Self::Output> {
+        boilerstrip::learn(&self.pages, &self.options)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
+        Ok(Removals::from(output))
+    }
+}
+
+pub struct ConvertTask {
+    html: String,
+    options: RustConvertOptions,
+}
+
+impl Task for ConvertTask {
+    type Output = boilerstrip::ConvertResult;
+    type JsValue = ConvertResult;
+
+    fn compute(&mut self) -> napi::Result<Self::Output> {
+        Ok(boilerstrip::convert(&self.html, &self.options))
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> napi::Result<Self::JsValue> {
+        Ok(ConvertResult::from(output))
+    }
+}
+
+#[napi(ts_return_type = "Promise<Removals>")]
+pub fn learn(pages: Vec<String>, options: Option<LearnOptions>) -> AsyncTask<LearnTask> {
+    let rust_options = options.map(RustLearnOptions::from).unwrap_or_default();
+    AsyncTask::new(LearnTask {
+        pages,
+        options: rust_options,
+    })
+}
+
+#[napi(ts_return_type = "Promise<ConvertResult>")]
+pub fn convert(html: String, options: Option<ConvertOptions>) -> AsyncTask<ConvertTask> {
     let rust_options = options.map(RustConvertOptions::from).unwrap_or_default();
-    boilerstrip::convert(&html, &rust_options).content
+    AsyncTask::new(ConvertTask {
+        html,
+        options: rust_options,
+    })
 }

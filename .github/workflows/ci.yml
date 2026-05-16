@@ -26,8 +26,17 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: package/package-lock.json
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('package/pnpm-lock.yaml') }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -37,9 +46,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Install npm dependencies
+      - name: Install dependencies
         working-directory: package
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -49,15 +58,15 @@ jobs:
 
       - name: Build native module
         working-directory: package
-        run: npm run build
+        run: pnpm build
 
       - name: TypeScript type check
         working-directory: package
-        run: npx tsc --noEmit
+        run: pnpm exec tsc --noEmit
 
       - name: Run Node tests
         working-directory: package
-        run: npm test
+        run: pnpm test
 
       - name: Build and test with internals feature
         run: cargo test -p boilerstrip --features internals

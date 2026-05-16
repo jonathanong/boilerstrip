@@ -10,98 +10,115 @@ function readFixture(path: string): string {
 }
 
 describe('learn', () => {
-  it('detects shared selectors from site_a', () => {
+  it('detects shared selectors from site_a', async () => {
     const pages = ['page1.html', 'page2.html', 'page3.html'].map((f) =>
       readFixture(`learn/site_a/${f}`),
     )
-    const removals = learn(pages)
+    const removals = await learn(pages)
     expect(removals.cssSelectorsToRemove).toContain('.site-nav')
     expect(removals.cssSelectorsToRemove).toContain('#site-footer')
   })
 
-  it('throws when fewer than 2 pages are provided', () => {
-    expect(() => learn(['<html></html>'])).toThrow()
+  it('throws when fewer than 2 pages are provided', async () => {
+    await expect(learn(['<html></html>'])).rejects.toThrow()
   })
 
-  it('returns css selectors and html snippets fields', () => {
+  it('returns css selectors and html snippets fields', async () => {
     const pages = [
       '<html><body><nav class="site-nav">Menu</nav><main>Page 1</main></body></html>',
       '<html><body><nav class="site-nav">Menu</nav><main>Page 2</main></body></html>',
     ]
-    const removals = learn(pages)
+    const removals = await learn(pages)
     expect(Array.isArray(removals.cssSelectorsToRemove)).toBe(true)
     expect(Array.isArray(removals.htmlToRemove)).toBe(true)
   })
 
-  it('accepts custom boilerplate patterns via options', () => {
+  it('accepts custom boilerplate patterns via options', async () => {
     const pages = [
       '<html><body><p class="ad">Buy now for great savings today!</p><main>Page 1 content</main></body></html>',
       '<html><body><p class="ad">Buy now for great savings today!</p><main>Page 2 content</main></body></html>',
     ]
-    const removals = learn(pages, { boilerplatePatterns: ['buy now'] })
+    const removals = await learn(pages, { boilerplatePatterns: ['buy now'] })
     expect(removals.cssSelectorsToRemove).toContain('.ad')
   })
 
-  it('accepts max_selector_matches_per_page override', () => {
-    // Just confirms the option is accepted without throwing.
+  it('accepts max_selector_matches_per_page override', async () => {
     const pages = [
       '<html><body><nav class="site-nav">Menu</nav><main>Page 1</main></body></html>',
       '<html><body><nav class="site-nav">Menu</nav><main>Page 2</main></body></html>',
     ]
-    const removals = learn(pages, { maxSelectorMatchesPerPage: 50 })
+    const removals = await learn(pages, { maxSelectorMatchesPerPage: 50 })
     expect(Array.isArray(removals.cssSelectorsToRemove)).toBe(true)
   })
 })
 
 describe('convert', () => {
-  it('converts basic HTML to markdown', () => {
+  it('converts basic HTML to markdown', async () => {
     const html = readFixture('convert/basic_article.html')
-    const result = convert(html)
-    expect(result).toContain('Getting Started')
+    const result = await convert(html)
+    expect(result.content).toContain('Getting Started')
   })
 
-  it('strips boilerplate when removals are provided via options', () => {
+  it('strips boilerplate when removals are provided via options', async () => {
     const pages = [
       '<html><body><nav class="nav">Menu</nav><main>Page 1 content</main></body></html>',
       '<html><body><nav class="nav">Menu</nav><main>Page 2 content</main></body></html>',
     ]
-    const removals: Removals = learn(pages)
+    const removals: Removals = await learn(pages)
     const html =
       '<html><body><nav class="nav">Menu</nav><main>Article content</main></body></html>'
-    const result = convert(html, { removals })
-    expect(result).not.toContain('Menu')
-    expect(result).toContain('Article content')
+    const result = await convert(html, { removals })
+    expect(result.content).not.toContain('Menu')
+    expect(result.content).toContain('Article content')
   })
 
-  it('converts without options', () => {
+  it('converts without options', async () => {
     const html = '<html><body><main><h1>Hello</h1><p>World</p></main></body></html>'
-    const result = convert(html)
-    expect(result).toContain('Hello')
-    expect(result).toContain('World')
+    const result = await convert(html)
+    expect(result.content).toContain('Hello')
+    expect(result.content).toContain('World')
   })
 
-  it('applies content_selectors option', () => {
+  it('applies content_selectors option', async () => {
     const html =
       '<html><body><nav>Nav</nav><article><h1>Article heading</h1></article></body></html>'
-    const result = convert(html, { contentSelectors: ['article'] })
-    expect(result).toContain('Article heading')
-    expect(result).not.toContain('Nav')
+    const result = await convert(html, { contentSelectors: ['article'] })
+    expect(result.content).toContain('Article heading')
+    expect(result.content).not.toContain('Nav')
   })
 
-  it('removes links matching href prefix via options', () => {
+  it('removes links matching href prefix via options', async () => {
     const html =
       '<html><body><main><a href="javascript:void(0)">Click</a><a href="/safe">Safe</a></main></body></html>'
-    const result = convert(html, { linkHrefsToRemove: ['javascript:'] })
-    expect(result).not.toContain('javascript:')
-    expect(result).toContain('Safe')
+    const result = await convert(html, { linkHrefsToRemove: ['javascript:'] })
+    expect(result.content).not.toContain('javascript:')
+    expect(result.content).toContain('Safe')
   })
 
-  it('applies text density filter via options', () => {
+  it('applies text density filter via options', async () => {
     const longFooter = 'Footer text '.repeat(30)
     const html = `<html><body><footer>${longFooter}</footer><article>Real content here</article></body></html>`
     const removals: Removals = { cssSelectorsToRemove: ['footer'], htmlToRemove: [] }
-    const result = convert(html, { removals, useTextDensityFilter: true })
-    expect(result).not.toContain('Footer text')
-    expect(result).toContain('Real content')
+    const result = await convert(html, { removals, useTextDensityFilter: true })
+    expect(result.content).not.toContain('Footer text')
+    expect(result.content).toContain('Real content')
+  })
+
+  it('returns metadata fields', async () => {
+    const html = `<html lang="en">
+      <head>
+        <title>My Page</title>
+        <meta name="description" content="A test page" />
+        <link rel="canonical" href="https://example.com/page" />
+        <link rel="me" href="https://example.com/author" />
+      </head>
+      <body><main><p>Content here</p></main></body>
+    </html>`
+    const result = await convert(html)
+    expect(result.title).toBe('My Page')
+    expect(result.lang).toBe('en')
+    expect(result.canonicalUrl).toBe('https://example.com/page')
+    expect((result.meta as Record<string, string>).description).toBe('A test page')
+    expect((result.link as Record<string, string>).me).toBe('https://example.com/author')
   })
 })
