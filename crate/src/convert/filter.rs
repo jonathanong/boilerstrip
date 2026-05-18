@@ -138,9 +138,7 @@ fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
     !patterns.is_empty()
         && href.is_some_and(|h| {
             let h_lower = h.trim().to_lowercase();
-            patterns
-                .iter()
-                .any(|pat| h_lower.starts_with(pat.as_str()))
+            patterns.iter().any(|pat| h_lower.starts_with(pat.as_str()))
         })
 }
 
