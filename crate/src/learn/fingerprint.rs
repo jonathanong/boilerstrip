@@ -1,27 +1,51 @@
 use super::constants::MAX_FINGERPRINT_WORDS;
 
 pub(super) fn normalized_text_fingerprint(text: &str) -> String {
-    let mut normalized = String::with_capacity(text.len());
+    // Allocate space assuming average word length is ~5 chars + space, bounded by MAX_FINGERPRINT_WORDS
+    let mut result = String::with_capacity(text.len().min(MAX_FINGERPRINT_WORDS * 6));
+    let mut words = 0;
+    let mut in_word = false;
 
     for ch in text.chars() {
-        if ch.is_ascii_alphabetic() {
-            normalized.push(ch.to_ascii_lowercase());
+        let mapped = if ch.is_ascii_alphabetic() {
+            ch.to_ascii_lowercase()
         } else if ch.is_ascii_digit() {
-            normalized.push('#');
+            '#'
         } else {
-            normalized.push(' ');
+            ' '
+        };
+
+        if mapped == ' ' {
+            if in_word {
+                in_word = false;
+                words += 1;
+                if words == MAX_FINGERPRINT_WORDS {
+                    break;
+                }
+            }
+        } else {
+            if !in_word {
+                if words > 0 {
+                    result.push(' ');
+                }
+                in_word = true;
+            }
+            result.push(mapped);
         }
     }
 
-    normalize_whitespace(&normalized)
-        .split_whitespace()
-        .take(MAX_FINGERPRINT_WORDS)
-        .collect::<Vec<_>>()
-        .join(" ")
+    result
 }
 
 pub(super) fn normalize_whitespace(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut result = String::with_capacity(value.len());
+    for (i, word) in value.split_whitespace().enumerate() {
+        if i > 0 {
+            result.push(' ');
+        }
+        result.push_str(word);
+    }
+    result
 }
 
 #[cfg(test)]
