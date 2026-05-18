@@ -136,7 +136,12 @@ fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
 
 fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
     !patterns.is_empty()
-        && href.is_some_and(|h| patterns.iter().any(|pat| h.starts_with(pat.as_str())))
+        && href.is_some_and(|h| {
+            let h_lower = h.trim().to_lowercase();
+            patterns
+                .iter()
+                .any(|pat| h_lower.starts_with(pat.as_str()))
+        })
 }
 
 #[cfg(test)]
@@ -206,6 +211,14 @@ mod tests {
         let html = "<p><button>Click</button></p>";
         let result = filter_links(html, &[], &[]);
         assert!(!result.contains("<button>"));
+    }
+
+    #[test]
+    fn filter_links_removes_href_with_mixed_case_and_whitespace() {
+        let html = r#"<p><a href="  JaVaScRiPt:alert(1)">Click</a></p>"#;
+        let result = filter_links(html, &[], &["javascript:".to_string()]);
+        assert!(!result.contains("JaVaScRiPt:"));
+        assert!(!result.contains("Click"));
     }
 
     #[test]
