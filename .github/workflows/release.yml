@@ -86,7 +86,7 @@ jobs:
           node-version: 22
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
@@ -201,7 +201,7 @@ jobs:
           node-version: 22
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
@@ -215,7 +215,7 @@ jobs:
         run: pnpm exec napi build --platform --release --target ${{ matrix.target }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.target }}
           path: package/*.node
@@ -244,7 +244,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11
 
@@ -253,7 +253,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Download all native binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: package
           merge-multiple: true
