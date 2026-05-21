@@ -68,6 +68,46 @@ mod tests {
     }
 
     #[test]
+    fn fingerprint_caps_at_max_words_without_trailing_space() {
+        let words: Vec<_> = (0..MAX_FINGERPRINT_WORDS)
+            .map(|i| format!("word{i}"))
+            .collect();
+        let input = words.join(" ");
+        let fp = normalized_text_fingerprint(&input);
+
+        assert_eq!(fp.split_whitespace().count(), MAX_FINGERPRINT_WORDS);
+        assert_eq!(fp, input.replace(|c: char| c.is_ascii_digit(), "#"));
+    }
+
+    #[test]
+    fn fingerprint_caps_at_max_words_with_trailing_space() {
+        let words: Vec<_> = (0..MAX_FINGERPRINT_WORDS)
+            .map(|i| format!("word{i}"))
+            .collect();
+        let input = format!("{} ", words.join(" "));
+        let fp = normalized_text_fingerprint(&input);
+
+        assert_eq!(fp.split_whitespace().count(), MAX_FINGERPRINT_WORDS);
+        assert_eq!(
+            fp,
+            words.join(" ").replace(|c: char| c.is_ascii_digit(), "#")
+        );
+    }
+
+    #[test]
+    fn fingerprint_treats_unicode_whitespace_as_separator() {
+        assert_eq!(
+            normalized_text_fingerprint("Alpha\u{00a0}Beta\u{2003}Gamma"),
+            "alpha beta gamma"
+        );
+    }
+
+    #[test]
+    fn fingerprint_returns_empty_for_only_punctuation() {
+        assert_eq!(normalized_text_fingerprint(".,;:!?-()[]{}"), "");
+    }
+
+    #[test]
     fn fingerprint_returns_empty_for_blank() {
         assert_eq!(normalized_text_fingerprint(""), "");
         assert_eq!(normalized_text_fingerprint("   "), "");
