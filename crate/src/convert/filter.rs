@@ -135,8 +135,39 @@ fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
 }
 
 fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
-    !patterns.is_empty()
-        && href.is_some_and(|h| patterns.iter().any(|pat| h.starts_with(pat.as_str())))
+    !patterns.is_empty() && href.is_some_and(|h| patterns.iter().any(|pat| href_matches(h, pat)))
+}
+
+fn href_matches(href: &str, pattern: &str) -> bool {
+    if href.starts_with(pattern) {
+        return true;
+    }
+
+    if !is_scheme_prefix(pattern) {
+        return false;
+    }
+
+    let normalized_pattern = normalize_href_scheme(pattern);
+    !normalized_pattern.is_empty()
+        && normalize_href_scheme(href).starts_with(normalized_pattern.as_str())
+}
+
+fn is_scheme_prefix(pattern: &str) -> bool {
+    let Some(scheme) = pattern.strip_suffix(':') else {
+        return false;
+    };
+
+    let mut chars = scheme.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+}
+
+fn normalize_href_scheme(value: &str) -> String {
+    value
+        .bytes()
+        .filter(|c| !(c.is_ascii_control() || c.is_ascii_whitespace()))
+        .map(|c| c.to_ascii_lowercase() as char)
+        .collect::<String>()
 }
 
 #[cfg(test)]
@@ -206,6 +237,38 @@ mod tests {
         let html = "<p><button>Click</button></p>";
         let result = filter_links(html, &[], &[]);
         assert!(!result.contains("<button>"));
+    }
+
+    #[test]
+    fn filter_links_removes_href_with_mixed_case_and_whitespace() {
+        let html = r#"<p><a href="  JaVaScRiPt:alert(1)">Click</a></p>"#;
+        let result = filter_links(html, &[], &["javascript:".to_string()]);
+        assert!(!result.contains("JaVaScRiPt:"));
+        assert!(!result.contains("Click"));
+    }
+
+    #[test]
+    fn filter_links_removes_href_with_ascii_control_characters() {
+        let html = "<p><a href=\"\x01java\nscript:alert(1)\">Click</a></p>";
+        let result = filter_links(html, &[], &["javascript:".to_string()]);
+        assert!(!result.contains("java"));
+        assert!(!result.contains("Click"));
+    }
+
+    #[test]
+    fn filter_links_normalizes_mixed_case_scheme_pattern() {
+        let html = r#"<p><a href="javascript:void(0)">Click</a></p>"#;
+        let result = filter_links(html, &[], &["JavaScript:".to_string()]);
+        assert!(!result.contains("javascript:"));
+        assert!(!result.contains("Click"));
+    }
+
+    #[test]
+    fn filter_links_keeps_non_scheme_href_prefix_case_sensitive() {
+        let html = r#"<p><a href="/Admin">Keep</a> <a href="/admin">Remove</a></p>"#;
+        let result = filter_links(html, &[], &["/admin".to_string()]);
+        assert!(result.contains("Keep"));
+        assert!(!result.contains("Remove"));
     }
 
     #[test]
