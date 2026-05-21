@@ -5,3 +5,4 @@ coverage/
 .claude/
 *.profraw
 package/*.tgz
+.jules/
