@@ -32,15 +32,15 @@ use crate::learn::apply::apply_html_snippet_removals;
 
 /// Convert raw HTML into Markdown with extracted metadata.
 pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
-    // Collect all CSS selectors to strip in the streaming pass.
-    let mut remove_selectors: Vec<String> = Vec::new();
-    if let Some(removals) = &options.removals {
-        remove_selectors.extend(removals.css_selectors_to_remove.iter().cloned());
-    }
-    remove_selectors.extend(options.css_selectors_to_remove.iter().cloned());
-
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
-    let stripped_bytes = strip::strip_elements(html, &remove_selectors);
+    let stripped_bytes = strip::strip_elements(
+        html,
+        options
+            .removals
+            .iter()
+            .flat_map(|r| r.css_selectors_to_remove.iter())
+            .chain(options.css_selectors_to_remove.iter()),
+    );
     // lol_html only removes whole elements and their content, never splits a
     // multi-byte sequence, so the output is still valid UTF-8 when the input is.
     let mut working_html = String::from_utf8(stripped_bytes)
