@@ -71,14 +71,14 @@ mod tests {
     #[test]
     fn strip_removes_matching_selector() {
         let html = "<html><body><nav class=\"nav\">Menu</nav><p>Content</p></body></html>";
-        let out = String::from_utf8(strip_elements(html, &[".nav"])).unwrap();
+        let out = String::from_utf8(strip_elements(html, [".nav"])).unwrap();
         assert!(!out.contains("Menu") && out.contains("Content"));
     }
 
     #[test]
     fn strip_skips_invalid_selector() {
         // ">>" is not a valid CSS selector; lol_html should reject it, so strip gracefully skips it
-        let out = String::from_utf8(strip_elements("<p>Keep</p>", &[">>"])).unwrap();
+        let out = String::from_utf8(strip_elements("<p>Keep</p>", [">>"])).unwrap();
         assert!(out.contains("Keep"));
     }
 }
