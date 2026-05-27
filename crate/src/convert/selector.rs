@@ -139,9 +139,9 @@ mod tests {
     fn remove_by_css_selectors_skips_complex_invalid_selectors() {
         let html = "<div class=\"keep\">Keep</div><div class=\"remove\">Remove</div>";
         let selectors = vec![
-            ":unsupported-pseudo".to_string(), // unsupported pseudo-class
-            ".remove".to_string(),             // valid selector
-            "::before".to_string(),            // pseudo-element
+            ":unsupported-pseudo".to_string(),   // unsupported pseudo-class
+            ".remove".to_string(),               // valid selector
+            "::before".to_string(),              // pseudo-element
             "div:invalid-pseudo(1)".to_string(), // complex invalid pseudo
         ];
         let result = remove_by_css_selectors(html, Some(&selectors));
