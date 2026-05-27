@@ -265,3 +265,32 @@ pub fn convert_many(
         options: rust_options,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_panic_message_str() {
+        let payload = std::panic::catch_unwind(|| {
+            panic!("static string panic");
+        }).unwrap_err();
+        assert_eq!(panic_message(&payload), "static string panic");
+    }
+
+    #[test]
+    fn test_panic_message_string() {
+        let payload = std::panic::catch_unwind(|| {
+            panic!("{}", format!("formatted {} panic", "string"));
+        }).unwrap_err();
+        assert_eq!(panic_message(&payload), "formatted string panic");
+    }
+
+    #[test]
+    fn test_panic_message_unknown() {
+        let payload = std::panic::catch_unwind(|| {
+            std::panic::panic_any(42);
+        }).unwrap_err();
+        assert_eq!(panic_message(&payload), "unknown panic");
+    }
+}
