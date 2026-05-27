@@ -919,6 +919,21 @@ mod tests {
     }
 
     #[test]
+    fn deep_nesting_below_limit_serializes_correctly() {
+        // 50 nested divs, well below the MAX_DEPTH of 200
+        let mut html = String::new();
+        for _ in 0..50 {
+            html.push_str("<div>");
+        }
+        html.push_str("deep content");
+        for _ in 0..50 {
+            html.push_str("</div>");
+        }
+        let result = md(&html);
+        assert!(result.contains("deep content"), "content below depth limit should appear");
+    }
+
+    #[test]
     fn pre_block_with_triple_backtick_uses_longer_fence() {
         let result = md("<pre><code>let x = ```foo```;</code></pre>");
         // The fence must be at least 4 backticks
