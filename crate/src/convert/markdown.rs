@@ -930,7 +930,10 @@ mod tests {
             html.push_str("</div>");
         }
         let result = md(&html);
-        assert!(result.contains("deep content"), "content below depth limit should appear");
+        assert!(
+            result.contains("deep content"),
+            "content below depth limit should appear"
+        );
     }
 
     #[test]
