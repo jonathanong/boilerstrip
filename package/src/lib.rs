@@ -274,7 +274,8 @@ mod tests {
     fn test_panic_message_str() {
         let payload = std::panic::catch_unwind(|| {
             panic!("static string panic");
-        }).unwrap_err();
+        })
+        .unwrap_err();
         assert_eq!(panic_message(&payload), "static string panic");
     }
 
@@ -282,7 +283,8 @@ mod tests {
     fn test_panic_message_string() {
         let payload = std::panic::catch_unwind(|| {
             panic!("{}", format!("formatted {} panic", "string"));
-        }).unwrap_err();
+        })
+        .unwrap_err();
         assert_eq!(panic_message(&payload), "formatted string panic");
     }
 
@@ -290,7 +292,8 @@ mod tests {
     fn test_panic_message_unknown() {
         let payload = std::panic::catch_unwind(|| {
             std::panic::panic_any(42);
-        }).unwrap_err();
+        })
+        .unwrap_err();
         assert_eq!(panic_message(&payload), "unknown panic");
     }
 }
