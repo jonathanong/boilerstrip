@@ -66,12 +66,14 @@ fn calculate_text_density_score(element: &ElementRef) -> i32 {
 /// as it avoids a serialization + re-parse round-trip.
 pub fn filter_links_inplace(
     document: &mut Html,
-    link_text_content_to_remove: &[String],
+    link_text_content_to_remove_lower: &[String],
     link_hrefs_to_remove: &[String],
 ) {
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(el, link_text_content_to_remove_lower, link_hrefs_to_remove)
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -110,9 +112,15 @@ pub fn filter_links(
     link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
+    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -125,12 +133,10 @@ pub fn filter_links(
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
-    !patterns.is_empty() && {
+fn should_remove_by_text(text: &str, patterns_lower: &[String]) -> bool {
+    !patterns_lower.is_empty() && {
         let text_lower = text.to_lowercase();
-        patterns
-            .iter()
-            .any(|p| text_lower.contains(&p.to_lowercase()))
+        patterns_lower.iter().any(|p| text_lower.contains(p))
     }
 }
 
