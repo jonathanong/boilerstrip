@@ -143,12 +143,19 @@ fn should_remove_by_text(text: &str, patterns_lower: &[String]) -> bool {
         return false;
     }
 
-    if text.chars().any(|c| c.is_uppercase()) {
-        let text_lower = text.to_lowercase();
-        return patterns_lower.iter().any(|p| text_lower.contains(p));
+    if text.is_ascii() {
+        if text.as_bytes().iter().any(|c| c.is_ascii_uppercase()) {
+            let text_lower = text.to_lowercase();
+            return patterns_lower.iter().any(|p| text_lower.contains(p));
+        }
+
+        return patterns_lower.iter().any(|p| text.contains(p));
     }
 
-    patterns_lower.iter().any(|p| text.contains(p))
+    {
+        let text_lower = text.to_lowercase();
+        patterns_lower.iter().any(|p| text_lower.contains(p))
+    }
 }
 
 fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
