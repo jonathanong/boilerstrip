@@ -44,10 +44,10 @@ impl CompiledRemovals {
             .iter()
             .filter_map(|s| Selector::parse(s).ok())
             .collect();
-        let mut sorted_snippets = removals.html_to_remove.clone();
+        let mut sorted_snippets: Vec<&String> = removals.html_to_remove.iter().collect();
         sorted_snippets.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
         let snippet_regexes = sorted_snippets
-            .iter()
+            .into_iter()
             .filter(|s| !s.trim().is_empty())
             .filter_map(|s| build_snippet_regex(s).map(|re| (normalize_whitespace(s), re)))
             .collect();
@@ -93,12 +93,12 @@ fn apply_css_selector_removals(html: &str, selectors: &[String]) -> String {
 pub(crate) fn apply_html_snippet_removals(html: &str, snippets: &[String]) -> String {
     let mut cleaned = html.to_string();
 
-    let mut sorted_snippets = snippets.to_vec();
+    let mut sorted_snippets: Vec<&String> = snippets.iter().collect();
     sorted_snippets.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
 
     // Precompile all snippet regexes upfront — avoids Regex::new per iteration.
     let compiled: Vec<(String, Regex)> = sorted_snippets
-        .iter()
+        .into_iter()
         .filter(|s| !s.trim().is_empty())
         .filter_map(|s| build_snippet_regex(s).map(|re| (normalize_whitespace(s), re)))
         .collect();
