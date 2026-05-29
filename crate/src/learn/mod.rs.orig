@@ -45,7 +45,7 @@ use snippets::{
     collect_breadth_first_snippet_candidates, should_skip_element,
     snippet_contains_selected_selector,
 };
-use types::{LearnConfig, ScoredSelector, SelectorStats, SnippetCandidate};
+use types::{LearnConfig, ScoredSelector, SelectorStats};
 
 /// Analyze a set of HTML pages from the same site and identify boilerplate elements.
 ///
@@ -64,34 +64,6 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
     let config = LearnConfig::from_options(options);
     let min_shared_pages = minimum_shared_page_count(pages.len());
 
-    let selector_stats = collect_selector_stats(pages);
-
-    let boilerplate_patterns = resolve_boilerplate_patterns(options);
-    let snippet_candidates = collect_breadth_first_snippet_candidates(
-        pages,
-        min_shared_pages,
-        &boilerplate_patterns,
-        &config,
-    );
-
-    let ranked_selectors = rank_selectors(&selector_stats, min_shared_pages, &config);
-
-    let promoted_selectors = collect_promoted_selectors(&snippet_candidates, min_shared_pages);
-    let css_selectors_to_remove =
-        merge_ranked_and_promoted_selectors(ranked_selectors, promoted_selectors);
-
-    let selected_selectors: HashSet<_> = css_selectors_to_remove.iter().cloned().collect();
-
-    let html_to_remove =
-        filter_snippet_candidates(snippet_candidates, min_shared_pages, &selected_selectors);
-
-    Ok(Removals {
-        css_selectors_to_remove,
-        html_to_remove,
-    })
-}
-
-fn collect_selector_stats(pages: &[String]) -> HashMap<String, SelectorStats> {
     // Parse and score each page in parallel; merge results sequentially.
     type PageStats = Vec<(String, usize, String)>; // (selector, page_index, fingerprint)
     let per_page: Vec<PageStats> = pages
@@ -120,7 +92,7 @@ fn collect_selector_stats(pages: &[String]) -> HashMap<String, SelectorStats> {
         })
         .collect();
 
-    per_page
+    let selector_stats: HashMap<String, SelectorStats> = per_page
         .into_par_iter()
         .fold(
             HashMap::new,
@@ -138,17 +110,19 @@ fn collect_selector_stats(pages: &[String]) -> HashMap<String, SelectorStats> {
                 a.entry(k).or_insert_with(SelectorStats::new).merge(v);
             }
             a
-        })
-}
+        });
 
-fn rank_selectors(
-    selector_stats: &HashMap<String, SelectorStats>,
-    min_shared_pages: usize,
-    config: &LearnConfig,
-) -> Vec<String> {
+    let boilerplate_patterns = resolve_boilerplate_patterns(options);
+    let snippet_candidates = collect_breadth_first_snippet_candidates(
+        pages,
+        min_shared_pages,
+        &boilerplate_patterns,
+        &config,
+    );
+
     let mut scored_css_selectors = Vec::new();
-    for (selector, stats) in selector_stats {
-        if let Some(score) = stats.score(min_shared_pages, config) {
+    for (selector, stats) in &selector_stats {
+        if let Some(score) = stats.score(min_shared_pages, &config) {
             scored_css_selectors.push(ScoredSelector {
                 selector: selector.clone(),
                 score,
@@ -166,23 +140,23 @@ fn rank_selectors(
             .then_with(|| left.selector.cmp(&right.selector))
     });
 
-    scored_css_selectors
+    let ranked_selectors = scored_css_selectors
         .into_iter()
         .map(|item| item.selector)
-        .collect::<Vec<_>>()
-}
+        .collect::<Vec<_>>();
 
-fn filter_snippet_candidates(
-    snippet_candidates: HashMap<String, SnippetCandidate>,
-    min_shared_pages: usize,
-    selected_selectors: &HashSet<String>,
-) -> Vec<String> {
+    let promoted_selectors = collect_promoted_selectors(&snippet_candidates, min_shared_pages);
+    let css_selectors_to_remove =
+        merge_ranked_and_promoted_selectors(ranked_selectors, promoted_selectors);
+
+    let selected_selectors: HashSet<_> = css_selectors_to_remove.iter().cloned().collect();
+
     let mut html_to_remove = snippet_candidates
         .into_values()
         .filter(|candidate| {
             candidate.pages_seen.len() >= min_shared_pages
-                && candidate.selectors_seen.is_disjoint(selected_selectors)
-                && !snippet_contains_selected_selector(&candidate.snippet, selected_selectors)
+                && candidate.selectors_seen.is_disjoint(&selected_selectors)
+                && !snippet_contains_selected_selector(&candidate.snippet, &selected_selectors)
         })
         .map(|candidate| candidate.snippet)
         .collect::<Vec<_>>();
@@ -190,7 +164,10 @@ fn filter_snippet_candidates(
     html_to_remove.sort_by(compare_snippets_for_removal);
     html_to_remove.dedup();
 
-    html_to_remove
+    Ok(Removals {
+        css_selectors_to_remove,
+        html_to_remove,
+    })
 }
 
 /// Return a list of patterns marking common boilerplate text.
