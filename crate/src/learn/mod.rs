@@ -92,7 +92,7 @@ pub fn learn(pages: &[String], options: &LearnOptions) -> Result<Removals, Learn
 }
 
 fn collect_selector_stats(pages: &[String]) -> HashMap<String, SelectorStats> {
-    // Parse and score each page in parallel; merge results sequentially.
+    // Parse and score each page in parallel, then merge the results in a parallel reduction.
     type PageStats = Vec<(String, usize, String)>; // (selector, page_index, fingerprint)
     let per_page: Vec<PageStats> = pages
         .par_iter()
