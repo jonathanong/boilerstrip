@@ -252,13 +252,9 @@ mod tests {
         );
 
         let mut links = Map::new();
-        links.insert("alternate".to_string(), Value::Object(Map::new()));
-        links
-            .get_mut("alternate")
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("rss".to_string(), Value::String("bad".to_string()));
+        let mut alt_map = Map::new();
+        alt_map.insert("rss".to_string(), Value::String("bad".to_string()));
+        links.insert("alternate".to_string(), Value::Object(alt_map));
         insert_alternate_link(&mut links, Some("rss"), "/feed");
         assert!(links
             .get("alternate")
@@ -294,7 +290,7 @@ mod tests {
     fn extract_lang_caps_at_35_chars() {
         let long_lang = "a".repeat(40);
         let doc = Html::parse_document(&format!("<html lang=\"{long_lang}\"></html>"));
-        let lang = extract_lang(&doc).unwrap();
+        let lang = extract_lang(&doc).expect("lang should be extracted");
         assert_eq!(lang.len(), 35);
     }
 
@@ -389,13 +385,9 @@ mod tests {
 
         // When the bucket key already exists but is not an Array, skip gracefully
         let mut links = Map::new();
-        links.insert("alternate".to_string(), Value::Object(Map::new()));
-        links
-            .get_mut("alternate")
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("rss".to_string(), Value::String("not-an-array".to_string()));
+        let mut alt_map = Map::new();
+        alt_map.insert("rss".to_string(), Value::String("not-an-array".to_string()));
+        links.insert("alternate".to_string(), Value::Object(alt_map));
         insert_alternate_link(&mut links, Some("rss"), "/feed2");
         let rss_val = links
             .get("alternate")
