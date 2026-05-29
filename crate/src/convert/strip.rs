@@ -8,6 +8,14 @@ use lol_html::{ElementContentHandlers, HtmlRewriter, Settings};
 ///
 /// Silently skips selectors that lol_html cannot parse.
 pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
+    strip_elements_with_iter(html, remove_selectors.iter())
+}
+
+pub(crate) fn strip_elements_with_iter<I, S>(html: &str, remove_selectors: I) -> Vec<u8>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let mut output = Vec::with_capacity(html.len());
 
     let mut element_content_handlers: Vec<(
@@ -26,7 +34,7 @@ pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
     )];
 
     for sel_str in remove_selectors {
-        if let Ok(selector) = sel_str.parse::<lol_html::Selector>() {
+        if let Ok(selector) = sel_str.as_ref().parse::<lol_html::Selector>() {
             element_content_handlers.push((
                 Cow::Owned(selector),
                 ElementContentHandlers::default().element(|el: &mut Element<'_, '_, _>| {
