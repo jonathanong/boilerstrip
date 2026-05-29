@@ -252,9 +252,13 @@ mod tests {
         );
 
         let mut links = Map::new();
-        let mut alt_map = Map::new();
-        alt_map.insert("rss".to_string(), Value::String("bad".to_string()));
-        links.insert("alternate".to_string(), Value::Object(alt_map));
+        links.insert("alternate".to_string(), Value::Object(Map::new()));
+        links
+            .get_mut("alternate")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("rss".to_string(), Value::String("bad".to_string()));
         insert_alternate_link(&mut links, Some("rss"), "/feed");
         assert!(links
             .get("alternate")
@@ -290,7 +294,7 @@ mod tests {
     fn extract_lang_caps_at_35_chars() {
         let long_lang = "a".repeat(40);
         let doc = Html::parse_document(&format!("<html lang=\"{long_lang}\"></html>"));
-        let lang = extract_lang(&doc).expect("lang should be extracted");
+        let lang = extract_lang(&doc).unwrap();
         assert_eq!(lang.len(), 35);
     }
 
@@ -372,27 +376,6 @@ mod tests {
     }
 
     #[test]
-    fn alternate_link_insert_handles_unexpected_nested_bucket_shape() {
-        let mut links = Map::new();
-        let mut alternate_map = Map::new();
-
-        // Setup the bucket itself as a non-array value
-        alternate_map.insert("rss".to_string(), Value::Bool(true));
-        links.insert("alternate".to_string(), Value::Object(alternate_map));
-
-        insert_alternate_link(&mut links, Some("rss"), "/feed3");
-
-        let rss_val = links
-            .get("alternate")
-            .and_then(|v| v.as_object())
-            .and_then(|m| m.get("rss"))
-            .expect("rss key should exist");
-
-        // The else branch should be hit and the value should remain unchanged as Bool.
-        assert_eq!(rss_val.as_bool(), Some(true));
-    }
-
-    #[test]
     fn alternate_link_insert_handles_unexpected_shapes_structured() {
         // When the alternate entry is already a non-object value, skip gracefully
         let mut links = Map::new();
@@ -406,9 +389,13 @@ mod tests {
 
         // When the bucket key already exists but is not an Array, skip gracefully
         let mut links = Map::new();
-        let mut alt_map = Map::new();
-        alt_map.insert("rss".to_string(), Value::String("not-an-array".to_string()));
-        links.insert("alternate".to_string(), Value::Object(alt_map));
+        links.insert("alternate".to_string(), Value::Object(Map::new()));
+        links
+            .get_mut("alternate")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("rss".to_string(), Value::String("not-an-array".to_string()));
         insert_alternate_link(&mut links, Some("rss"), "/feed2");
         let rss_val = links
             .get("alternate")

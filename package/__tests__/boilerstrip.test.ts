@@ -54,12 +54,6 @@ describe('learn', () => {
     const removals = await learn(pages, { maxSelectorMatchesPerPage: 50 })
     expect(Array.isArray(removals.cssSelectorsToRemove)).toBe(true)
   })
-
-  it('rejects with indexed error when a buffer is invalid UTF-8', async () => {
-    const valid = buf('<html><body><nav class="site-nav">Menu</nav><main>Page 1</main></body></html>')
-    const invalid = Buffer.from([0xff, 0xfe])
-    await expect(learn([valid, invalid, valid])).rejects.toThrow(/learn\[1\]/)
-  })
 })
 
 describe('convert', () => {

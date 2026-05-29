@@ -33,7 +33,7 @@ use crate::learn::apply::apply_html_snippet_removals;
 /// Convert raw HTML into Markdown with extracted metadata.
 pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
-    let stripped_bytes = strip::strip_elements_with_iter(
+    let stripped_bytes = strip::strip_elements(
         html,
         options
             .removals
