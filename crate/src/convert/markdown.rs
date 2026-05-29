@@ -239,12 +239,12 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
             // determine the required fence length (must exceed any backtick run).
             let mut scratch = State {
                 in_pre: true,
+                depth: state.depth,
                 ..Default::default()
             };
             for child in (*el).children() {
                 emit_node(child, &mut scratch);
             }
-            state.in_pre = false;
             let content = scratch.buf;
             // Count the longest consecutive backtick run in the content.
             let max_backtick_run = {
@@ -332,7 +332,10 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
 
         "a" => {
             let href = el.value().attr("href").map(str::to_owned);
-            let mut inner = State::default();
+            let mut inner = State {
+                depth: state.depth,
+                ..Default::default()
+            };
             for child in (*el).children() {
                 emit_node(child, &mut inner);
             }
@@ -412,7 +415,10 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
         "blockquote" => {
             state.ensure_newlines(2);
             // Collect all content, then prefix each line with "> "
-            let mut inner_state = State::default();
+            let mut inner_state = State {
+                depth: state.depth,
+                ..Default::default()
+            };
             for child in (*el).children() {
                 emit_node(child, &mut inner_state);
             }
