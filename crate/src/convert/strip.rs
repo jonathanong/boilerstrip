@@ -7,10 +7,15 @@ use lol_html::{ElementContentHandlers, HtmlRewriter, Settings};
 /// `<script>`, `<style>`, and any additional selectors in `remove_selectors`.
 ///
 /// Silently skips selectors that lol_html cannot parse.
-pub fn strip_elements(
-    html: &str,
-    remove_selectors: impl IntoIterator<Item = impl AsRef<str>>,
-) -> Vec<u8> {
+pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
+    strip_elements_with_iter(html, remove_selectors.iter())
+}
+
+pub(crate) fn strip_elements_with_iter<I, S>(html: &str, remove_selectors: I) -> Vec<u8>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let mut output = Vec::with_capacity(html.len());
 
     let mut element_content_handlers: Vec<(
@@ -63,22 +68,22 @@ mod tests {
     #[test]
     fn strip_removes_script_and_style() {
         let html = "<html><head><script>evil()</script></head><body><p>Keep</p></body></html>";
-        let empty: &[&str] = &[];
-        let out = String::from_utf8(strip_elements(html, empty)).unwrap();
+        let out =
+            String::from_utf8(strip_elements_with_iter(html, std::iter::empty::<&str>())).unwrap();
         assert!(!out.contains("evil") && out.contains("Keep"));
     }
 
     #[test]
     fn strip_removes_matching_selector() {
         let html = "<html><body><nav class=\"nav\">Menu</nav><p>Content</p></body></html>";
-        let out = String::from_utf8(strip_elements(html, [".nav"])).unwrap();
+        let out = String::from_utf8(strip_elements_with_iter(html, [".nav"])).unwrap();
         assert!(!out.contains("Menu") && out.contains("Content"));
     }
 
     #[test]
     fn strip_skips_invalid_selector() {
         // ">>" is not a valid CSS selector; lol_html should reject it, so strip gracefully skips it
-        let out = String::from_utf8(strip_elements("<p>Keep</p>", [">>"])).unwrap();
+        let out = String::from_utf8(strip_elements_with_iter("<p>Keep</p>", [">>"])).unwrap();
         assert!(out.contains("Keep"));
     }
 }
