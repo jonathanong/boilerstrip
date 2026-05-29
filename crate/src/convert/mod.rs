@@ -69,16 +69,9 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     let lang = parser::extract_lang(&document);
 
     // Filter links in-place (no re-parse).
-    // Pre-compute lowercased link texts to remove so we don't do it per-link.
-    let link_text_content_to_remove_lower: Vec<String> = options
-        .link_text_content_to_remove
-        .iter()
-        .map(|s| s.to_lowercase())
-        .collect();
-
     filter::filter_links_inplace(
         &mut document,
-        &link_text_content_to_remove_lower,
+        &options.link_text_content_to_remove,
         &options.link_hrefs_to_remove,
     );
 
