@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn test_panic_message_string() {
         let payload = std::panic::catch_unwind(|| {
-            panic!("{}", format!("formatted {} panic", "string"));
+            panic!("formatted {} panic", "string");
         })
         .unwrap_err();
         assert_eq!(panic_message(&payload), "formatted string panic");
