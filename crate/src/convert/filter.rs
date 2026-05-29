@@ -69,9 +69,16 @@ pub fn filter_links_inplace(
     link_text_content_to_remove: &[String],
     link_hrefs_to_remove: &[String],
 ) {
+    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -110,9 +117,15 @@ pub fn filter_links(
     link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
+    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
+        .iter()
+        .map(|s| s.to_lowercase())
+        .collect();
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -125,12 +138,23 @@ pub fn filter_links(
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
-    !patterns.is_empty() && {
+fn should_remove_by_text(text: &str, patterns_lower: &[String]) -> bool {
+    if patterns_lower.is_empty() {
+        return false;
+    }
+
+    if text.is_ascii() {
+        if text.as_bytes().iter().any(|c| c.is_ascii_uppercase()) {
+            let text_lower = text.to_lowercase();
+            return patterns_lower.iter().any(|p| text_lower.contains(p));
+        }
+
+        return patterns_lower.iter().any(|p| text.contains(p));
+    }
+
+    {
         let text_lower = text.to_lowercase();
-        patterns
-            .iter()
-            .any(|p| text_lower.contains(&p.to_lowercase()))
+        patterns_lower.iter().any(|p| text_lower.contains(p))
     }
 }
 
@@ -220,6 +244,18 @@ mod tests {
     fn filter_links_removes_by_text_pattern() {
         let html = r#"<p><a href="/close">Close</a> <a href="/keep">Keep</a></p>"#;
         let result = filter_links(html, &["close".to_string()], &[]);
+        assert!(!result.contains("Close"));
+        assert!(result.contains("Keep"));
+    }
+
+    #[test]
+    fn filter_links_inplace_removes_by_text_pattern_case_insensitive() {
+        let html = r#"<html><body><main><a href="/close">Close</a> <a href="/keep">Keep</a></main></body></html>"#;
+        let mut document = Html::parse_document(html);
+
+        filter_links_inplace(&mut document, &["close".to_string()], &[]);
+
+        let result = crate::util::serialize_fragment_body(&document);
         assert!(!result.contains("Close"));
         assert!(result.contains("Keep"));
     }
