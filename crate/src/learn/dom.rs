@@ -9,9 +9,7 @@ pub(super) fn resolve_element_by_path<'a>(
 ) -> Option<ElementRef<'a>> {
     let mut current = root_element(document);
     for &child_index in path {
-        let children = element_children(&current);
-        let child = children.get(child_index)?;
-        current = *child;
+        current = element_children(current).nth(child_index)?;
     }
     Some(current)
 }
@@ -23,12 +21,13 @@ pub(super) fn root_element(document: &Html) -> ElementRef<'_> {
         .expect("BUG: scraper document should contain a body element")
 }
 
-pub(super) fn element_children<'a>(element: &ElementRef<'a>) -> Vec<ElementRef<'a>> {
+pub(super) fn element_children<'a>(
+    element: ElementRef<'a>,
+) -> impl Iterator<Item = ElementRef<'a>> {
     element
         .children()
         .filter_map(ElementRef::wrap)
         .filter(|child| !should_skip_element(child))
-        .collect()
 }
 
 #[cfg(test)]
@@ -61,7 +60,7 @@ mod tests {
     fn element_children_skips_script_and_style() {
         let doc = Html::parse_document("<html><body><script>js</script><p>keep</p></body></html>");
         let root = root_element(&doc);
-        let children = element_children(&root);
+        let children: Vec<_> = element_children(root).collect();
         assert_eq!(children.len(), 1);
         assert_eq!(children[0].value().name(), "p");
     }
