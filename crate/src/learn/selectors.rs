@@ -1,5 +1,6 @@
 use scraper::ElementRef;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 
 use super::constants::{
     MAX_SELECTOR_DIGITS, MAX_SELECTOR_TOKEN_LENGTH, MIN_HEX_SEGMENT_LENGTH,
@@ -43,7 +44,7 @@ fn css_escape_identifier(value: &str) -> String {
             // Actually, use numeric escape for leading digit: \XX
             _ if i == 0 && ch.is_ascii_digit() => {
                 out.push('\\');
-                out.push_str(&format!("{:X} ", ch as u32));
+                write!(out, "{:X} ", ch as u32).unwrap();
             }
             // Special chars that need backslash-escaping in CSS identifiers
             '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '.' | '/'
