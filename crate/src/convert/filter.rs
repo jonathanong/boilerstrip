@@ -281,6 +281,22 @@ mod tests {
     }
 
     #[test]
+    fn filter_links_removes_by_text_pattern_non_ascii() {
+        let html = r#"<p><a href="/close">Cłose</a> <a href="/keep">Keep</a></p>"#;
+        let result = filter_links(html, &["cłose".to_string()], &[]);
+        assert!(!result.contains("Cłose"));
+        assert!(result.contains("Keep"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_ascii_lowercase() {
+        let html = r#"<p><a href="/close">close</a> <a href="/keep">keep</a></p>"#;
+        let result = filter_links(html, &["close".to_string()], &[]);
+        assert!(!result.contains("close"));
+        assert!(result.contains("keep"));
+    }
+
+    #[test]
     fn filter_links_inplace_removes_empty_and_anchor_links() {
         let html = r##"<html><body><p><a href="/page">Keep me</a> <a href="#">Skip</a> <a href="/x"></a></p></body></html>"##;
         let mut document = Html::parse_document(html);
