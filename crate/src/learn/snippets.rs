@@ -61,8 +61,7 @@ pub(super) fn collect_breadth_first_snippet_candidates(
                 .iter()
                 .filter_map(|document| resolve_element_by_path(document, &path))
             {
-                let child_count = element_children(&element).count();
-                for child_index in 0..child_count {
+                for (child_index, _) in element_children(element).enumerate() {
                     *child_index_counts.entry(child_index).or_insert(0) += 1;
                 }
             }

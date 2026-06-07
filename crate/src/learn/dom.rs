@@ -9,7 +9,7 @@ pub(super) fn resolve_element_by_path<'a>(
 ) -> Option<ElementRef<'a>> {
     let mut current = root_element(document);
     for &child_index in path {
-        current = element_children(&current).nth(child_index)?;
+        current = element_children(current).nth(child_index)?;
     }
     Some(current)
 }
@@ -22,7 +22,7 @@ pub(super) fn root_element(document: &Html) -> ElementRef<'_> {
 }
 
 pub(super) fn element_children<'a>(
-    element: &ElementRef<'a>,
+    element: ElementRef<'a>,
 ) -> impl Iterator<Item = ElementRef<'a>> {
     element
         .children()
@@ -60,7 +60,7 @@ mod tests {
     fn element_children_skips_script_and_style() {
         let doc = Html::parse_document("<html><body><script>js</script><p>keep</p></body></html>");
         let root = root_element(&doc);
-        let children: Vec<_> = element_children(&root).collect();
+        let children: Vec<_> = element_children(root).collect();
         assert_eq!(children.len(), 1);
         assert_eq!(children[0].value().name(), "p");
     }
