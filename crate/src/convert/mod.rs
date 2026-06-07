@@ -59,14 +59,11 @@ fn determine_content_root<'a>(
     document: &'a scraper::Html,
     options: &ConvertOptions,
 ) -> Option<scraper::ElementRef<'a>> {
-    let content_selectors_opt = if options.content_selectors.is_empty() {
-        None
-    } else {
-        Some(options.content_selectors.as_slice())
-    };
     if options.use_text_density_filter {
         filter::apply_text_density_filter(document)
     } else {
+        let content_selectors_opt =
+            (!options.content_selectors.is_empty()).then(|| options.content_selectors.as_slice());
         selector::select_content_root(document, content_selectors_opt)
     }
 }
