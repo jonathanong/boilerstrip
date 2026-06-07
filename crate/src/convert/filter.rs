@@ -242,10 +242,51 @@ mod tests {
 
     #[test]
     fn filter_links_removes_by_text_pattern() {
-        let html = r#"<p><a href="/close">Close</a> <a href="/keep">Keep</a></p>"#;
-        let result = filter_links(html, &["close".to_string()], &[]);
-        assert!(!result.contains("Close"));
-        assert!(result.contains("Keep"));
+        let html = "<p><a href=\"/\">Log In</a> <a href=\"/y\">Read More</a> <a href=\"/z\">Share</a></p>";
+        let patterns = vec!["log in".to_string(), "share".to_string()];
+        let filtered = filter_links(html, &patterns, &[]);
+        assert!(!filtered.contains("Log In"));
+        assert!(!filtered.contains("Share"));
+        assert!(filtered.contains("Read More"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_lowercase() {
+        let html = "<p><a href=\"/\">log in</a> <a href=\"/y\">read more</a> <a href=\"/z\">share</a></p>";
+        let patterns = vec!["log in".to_string(), "share".to_string()];
+        let filtered = filter_links(html, &patterns, &[]);
+        assert!(!filtered.contains("log in"));
+        assert!(!filtered.contains("share"));
+        assert!(filtered.contains("read more"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_non_ascii() {
+        let html = "<p><a href=\"/\">Connexion</a> <a href=\"/y\">Lire la suite</a> <a href=\"/z\">Partager</a></p>";
+        let patterns = vec!["connexion".to_string(), "partager".to_string()];
+        let filtered = filter_links(html, &patterns, &[]);
+        assert!(!filtered.contains("Connexion"));
+        assert!(!filtered.contains("Partager"));
+        assert!(filtered.contains("Lire la suite"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_non_ascii_lowercase() {
+        let html = "<p><a href=\"/\">connexion</a> <a href=\"/y\">lire la suite</a> <a href=\"/z\">partager</a></p>";
+        let patterns = vec!["connexion".to_string(), "partager".to_string()];
+        let filtered = filter_links(html, &patterns, &[]);
+        assert!(!filtered.contains("connexion"));
+        assert!(!filtered.contains("partager"));
+        assert!(filtered.contains("lire la suite"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_non_ascii_fallback() {
+        let html = "<p><a href=\"/\">Log In\u{00A0}Now</a> <a href=\"/y\">Read More</a></p>";
+        let patterns = vec!["log in\u{00A0}now".to_string()];
+        let filtered = filter_links(html, &patterns, &[]);
+        assert!(!filtered.contains("Log In\u{00A0}Now"));
+        assert!(filtered.contains("Read More"));
     }
 
     #[test]
