@@ -43,7 +43,9 @@ fn css_escape_identifier(value: &str) -> String {
             // Actually, use numeric escape for leading digit: \XX
             _ if i == 0 && ch.is_ascii_digit() => {
                 out.push('\\');
-                out.push_str(&format!("{:X} ", ch as u32));
+                out.push('3');
+                out.push(ch);
+                out.push(' ');
             }
             // Special chars that need backslash-escaping in CSS identifiers
             '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '.' | '/'
