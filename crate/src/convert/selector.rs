@@ -208,4 +208,11 @@ mod tests {
         assert!(!result.contains("Menu"));
         assert!(result.contains("Keep"));
     }
+
+    #[test]
+    fn remove_by_css_selectors_skips_invalid_combinator_syntax() {
+        let html = "<p>Keep</p>";
+        let result = remove_by_css_selectors(html, Some(&[">>>".to_string()]));
+        assert_eq!(result, html);
+    }
 }
