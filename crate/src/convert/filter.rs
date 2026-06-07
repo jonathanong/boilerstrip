@@ -242,7 +242,8 @@ mod tests {
 
     #[test]
     fn filter_links_removes_by_text_pattern() {
-        let html = "<p><a href=\"/\">Log In</a> <a href=\"/y\">Read More</a> <a href=\"/z\">Share</a></p>";
+        let html =
+            "<p><a href=\"/\">Log In</a> <a href=\"/y\">Read More</a> <a href=\"/z\">Share</a></p>";
         let patterns = vec!["log in".to_string(), "share".to_string()];
         let filtered = filter_links(html, &patterns, &[]);
         assert!(!filtered.contains("Log In"));
@@ -252,7 +253,8 @@ mod tests {
 
     #[test]
     fn filter_links_removes_by_text_pattern_lowercase() {
-        let html = "<p><a href=\"/\">log in</a> <a href=\"/y\">read more</a> <a href=\"/z\">share</a></p>";
+        let html =
+            "<p><a href=\"/\">log in</a> <a href=\"/y\">read more</a> <a href=\"/z\">share</a></p>";
         let patterns = vec!["log in".to_string(), "share".to_string()];
         let filtered = filter_links(html, &patterns, &[]);
         assert!(!filtered.contains("log in"));
