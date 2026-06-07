@@ -281,6 +281,52 @@ mod tests {
     }
 
     #[test]
+    fn filter_links_inplace_removes_empty_and_anchor_links() {
+        let html = r##"<html><body><p><a href="/page">Keep me</a> <a href="#">Skip</a> <a href="/x"></a></p></body></html>"##;
+        let mut document = Html::parse_document(html);
+        filter_links_inplace(&mut document, &[], &[]);
+        let result = crate::util::serialize_fragment_body(&document);
+        assert!(result.contains("Keep me"));
+        assert!(!result.contains("href=\"#\""));
+        assert!(!result.contains("Skip"));
+        assert!(!result.contains("href=\"/x\""));
+    }
+
+    #[test]
+    fn filter_links_inplace_removes_by_href_prefix() {
+        let html = r#"<html><body><p><a href="javascript:void(0)">Click</a> <a href="/safe">Safe</a></p></body></html>"#;
+        let mut document = Html::parse_document(html);
+        filter_links_inplace(&mut document, &[], &["javascript:".to_string()]);
+        let result = crate::util::serialize_fragment_body(&document);
+        assert!(!result.contains("javascript:"));
+        assert!(!result.contains("Click"));
+        assert!(result.contains("Safe"));
+    }
+
+    #[test]
+    fn filter_links_inplace_removes_button_without_href() {
+        let html = r#"<html><body><p><button>Click</button></p></body></html>"#;
+        let mut document = Html::parse_document(html);
+        filter_links_inplace(&mut document, &[], &[]);
+        let result = crate::util::serialize_fragment_body(&document);
+        assert!(!result.contains("<button>"));
+        assert!(!result.contains("Click"));
+    }
+
+    #[test]
+    fn filter_links_inplace_preserves_image_only_link() {
+        let html = r#"<html><body><p><a href="/logo"><img src="logo.png" alt="Logo"></a></p></body></html>"#;
+        let mut document = Html::parse_document(html);
+        filter_links_inplace(&mut document, &[], &[]);
+        let result = crate::util::serialize_fragment_body(&document);
+        assert!(result.contains("href=\"/logo\""));
+        assert!(
+            result.contains("logo.png"),
+            "image-only link should be preserved"
+        );
+    }
+
+    #[test]
     fn filter_links_inplace_removes_by_text_pattern_case_insensitive() {
         let html = r#"<html><body><main><a href="/close">Close</a> <a href="/keep">Keep</a></main></body></html>"#;
         let mut document = Html::parse_document(html);
