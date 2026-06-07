@@ -252,11 +252,8 @@ fn emit_p(el: ElementRef<'_>, state: &mut State) {
     state.ensure_newlines(2);
 }
 
-fn emit_pre(el: ElementRef<'_>, state: &mut State) {
-    state.ensure_newlines(2);
-    // Check if direct child is <code> for fenced blocks
-    let lang = el
-        .children()
+fn extract_language(el: ElementRef<'_>) -> Option<String> {
+    el.children()
         .filter_map(ElementRef::wrap)
         .find(|c| c.value().name() == "code")
         .and_then(|code_el| code_el.value().attr("class"))
@@ -264,7 +261,29 @@ fn emit_pre(el: ElementRef<'_>, state: &mut State) {
             cls.split_whitespace()
                 .find(|c| c.starts_with("language-"))
                 .map(|c| c.trim_start_matches("language-").to_string())
-        });
+        })
+}
+
+fn count_max_consecutive_backticks(content: &str) -> usize {
+    let mut max_run = 0usize;
+    let mut cur_run = 0usize;
+    for ch in content.chars() {
+        if ch == '`' {
+            cur_run += 1;
+            if cur_run > max_run {
+                max_run = cur_run;
+            }
+        } else {
+            cur_run = 0;
+        }
+    }
+    max_run
+}
+
+fn emit_pre(el: ElementRef<'_>, state: &mut State) {
+    state.ensure_newlines(2);
+    // Check if direct child is <code> for fenced blocks
+    let lang = extract_language(el);
     let lang_str = lang.as_deref().unwrap_or("");
     // Collect the pre content into a scratch buffer first so we can
     // determine the required fence length (must exceed any backtick run).
@@ -278,21 +297,7 @@ fn emit_pre(el: ElementRef<'_>, state: &mut State) {
     }
     let content = scratch.buf;
     // Count the longest consecutive backtick run in the content.
-    let max_backtick_run = {
-        let mut max_run = 0usize;
-        let mut cur_run = 0usize;
-        for ch in content.chars() {
-            if ch == '`' {
-                cur_run += 1;
-                if cur_run > max_run {
-                    max_run = cur_run;
-                }
-            } else {
-                cur_run = 0;
-            }
-        }
-        max_run
-    };
+    let max_backtick_run = count_max_consecutive_backticks(&content);
     let fence_len = (max_backtick_run + 1).max(3);
     let fence: String = "`".repeat(fence_len);
     state.push_str(&fence);
