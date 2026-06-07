@@ -177,26 +177,38 @@ pub fn extract_lang(document: &Html) -> Option<String> {
 }
 
 pub(crate) fn is_safe_url(url: &str) -> bool {
-    let trimmed = url.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-    let scheme_end = trimmed
-        .char_indices()
-        .find_map(|(i, ch)| match ch {
-            ':' => Some(Some(i)),
-            '/' | '?' | '#' => Some(None),
-            _ => None,
-        })
-        .flatten();
+    let mut scheme_len = 0;
+    let mut has_chars = false;
 
-    match scheme_end {
-        None => true,
-        Some(end) => {
-            let scheme = trimmed[..end].to_ascii_lowercase();
-            scheme == "http" || scheme == "https"
+    // We only care about up to the first 5 characters (length of "https") to identify safe schemes.
+    let mut scheme = [0u8; 5];
+
+    for ch in url.chars() {
+        if ch.is_control() || ch.is_whitespace() {
+            continue;
+        }
+        has_chars = true;
+        match ch {
+            ':' => {
+                if scheme_len <= 5 {
+                    let s = &scheme[..scheme_len];
+                    return s == b"http" || s == b"https";
+                } else {
+                    return false;
+                }
+            }
+            '/' | '?' | '#' => return true,
+            _ => {
+                if scheme_len < 5 && ch.is_ascii() {
+                    scheme[scheme_len] = ch.to_ascii_lowercase() as u8;
+                    scheme_len += 1;
+                } else {
+                    scheme_len = 6; // Exceeds "https" length, guaranteed to fail match
+                }
+            }
         }
     }
+    has_chars
 }
 
 #[cfg(test)]
@@ -283,7 +295,13 @@ mod tests {
         assert!(!is_safe_url("data:text/plain,bad"));
         assert!(is_safe_url("/relative:path"));
         assert!(is_safe_url("https://example.com"));
+        assert!(is_safe_url("http://example.com"));
         assert!(!is_safe_url("javascript:alert(1)"));
+        assert!(!is_safe_url("java\tscript:alert(1)"));
+        assert!(!is_safe_url("java\nscript:alert(1)"));
+        assert!(!is_safe_url("\x00javascript:alert(1)"));
+        assert!(!is_safe_url("javascript\x09:alert(1)"));
+        assert!(!is_safe_url("javascript :alert(1)"));
     }
 
     #[test]
