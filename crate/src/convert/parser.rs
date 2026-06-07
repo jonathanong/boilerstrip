@@ -191,8 +191,8 @@ pub(crate) fn is_safe_url(url: &str) -> bool {
         match ch {
             ':' => {
                 if scheme_len <= 5 {
-                    let s = std::str::from_utf8(&scheme[..scheme_len]).unwrap_or("");
-                    return s.eq_ignore_ascii_case("http") || s.eq_ignore_ascii_case("https");
+                    let s = &scheme[..scheme_len];
+                    return s == b"http" || s == b"https";
                 } else {
                     return false;
                 }
