@@ -30,8 +30,7 @@ pub use types::{ConvertOptions, ConvertResult};
 
 use crate::learn::apply::apply_html_snippet_removals;
 
-/// Convert raw HTML into Markdown with extracted metadata.
-pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
+fn apply_stripping_phase(html: &str, options: &ConvertOptions) -> String {
     // Phase 1a — lol_html streaming pass: remove script/style + CSS selectors.
     let stripped_bytes = strip::strip_elements_with_iter(
         html,
@@ -52,6 +51,29 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
             working_html = apply_html_snippet_removals(&working_html, &removals.html_to_remove);
         }
     }
+
+    working_html
+}
+
+fn determine_content_root<'a>(
+    document: &'a scraper::Html,
+    options: &ConvertOptions,
+) -> Option<scraper::ElementRef<'a>> {
+    let content_selectors_opt = if options.content_selectors.is_empty() {
+        None
+    } else {
+        Some(options.content_selectors.as_slice())
+    };
+    if options.use_text_density_filter {
+        filter::apply_text_density_filter(document)
+    } else {
+        selector::select_content_root(document, content_selectors_opt)
+    }
+}
+
+/// Convert raw HTML into Markdown with extracted metadata.
+pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
+    let working_html = apply_stripping_phase(html, options);
 
     // Phase 2 — single scraper DOM parse.
     let mut document = scraper::Html::parse_document(&working_html);
@@ -75,17 +97,7 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
         &options.link_hrefs_to_remove,
     );
 
-    // Select content root.
-    let content_selectors_opt = if options.content_selectors.is_empty() {
-        None
-    } else {
-        Some(options.content_selectors.as_slice())
-    };
-    let content_root = if options.use_text_density_filter {
-        filter::apply_text_density_filter(&document)
-    } else {
-        selector::select_content_root(&document, content_selectors_opt)
-    };
+    let content_root = determine_content_root(&document, options);
 
     // Emit Markdown via custom tree walker (no additional parse).
     let content = content_root
