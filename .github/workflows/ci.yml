@@ -85,10 +85,6 @@ jobs:
             --lcov \
             --output-path target/llvm-cov/lcov.info
 
-      - name: Import Codecov signing key
-        if: ${{ env.CODECOV_TOKEN != '' }}
-        run: gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys 27034E7FDB850E0BBC2C62FF806BB28AED779869
-
       - name: Upload Rust coverage to Codecov
         if: ${{ env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v7.0.0
@@ -97,7 +93,6 @@ jobs:
           files: target/llvm-cov/lcov.info
           flags: rust
           fail_ci_if_error: true
-          version: v11.2.7
 
   bench:
     name: Bench
