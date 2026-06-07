@@ -622,10 +622,7 @@ mod tests {
     fn unusual_elements_emit_fallback() {
         let result =
             md("<p>Before <blink>Blinking text</blink> after.</p><marquee>Marquee text</marquee>");
-        assert!(result.contains("Before"));
-        assert!(result.contains("Blinking text"));
-        assert!(result.contains("after."));
-        assert!(result.contains("Marquee text"));
+        assert_eq!(result, "Before Blinking text after.\n\nMarquee text");
     }
 
     #[test]
