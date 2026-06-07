@@ -63,7 +63,7 @@ fn determine_content_root<'a>(
         filter::apply_text_density_filter(document)
     } else {
         let content_selectors_opt =
-            (!options.content_selectors.is_empty()).then(|| options.content_selectors.as_slice());
+            (!options.content_selectors.is_empty()).then_some(options.content_selectors.as_slice());
         selector::select_content_root(document, content_selectors_opt)
     }
 }
