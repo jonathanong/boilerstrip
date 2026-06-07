@@ -250,6 +250,19 @@ mod tests {
     }
 
     #[test]
+    fn selector_stats_rejects_no_shared_fingerprints() {
+        let cfg = default_config();
+        let mut stats = SelectorStats::new();
+
+        // Add matches to 2 different pages, but with different fingerprints
+        stats.record(0, "fp1");
+        stats.record(1, "fp2");
+
+        // They share no fingerprints, so it should return None
+        assert!(stats.score(2, &cfg).is_none());
+    }
+
+    #[test]
     fn selector_stats_scores_and_rejects_unstable_inputs() {
         let cfg = default_config();
         let mut stats = SelectorStats::new();
