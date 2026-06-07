@@ -252,7 +252,7 @@ fn emit_p(el: ElementRef<'_>, state: &mut State) {
     state.ensure_newlines(2);
 }
 
-fn extract_language(el: ElementRef<'_>) -> Option<String> {
+fn extract_language<'a>(el: ElementRef<'a>) -> Option<&'a str> {
     el.children()
         .filter_map(ElementRef::wrap)
         .find(|c| c.value().name() == "code")
@@ -260,15 +260,15 @@ fn extract_language(el: ElementRef<'_>) -> Option<String> {
         .and_then(|cls| {
             cls.split_whitespace()
                 .find(|c| c.starts_with("language-"))
-                .map(|c| c.trim_start_matches("language-").to_string())
+                .map(|c| c.trim_start_matches("language-"))
         })
 }
 
 fn count_max_consecutive_backticks(content: &str) -> usize {
     let mut max_run = 0usize;
     let mut cur_run = 0usize;
-    for ch in content.chars() {
-        if ch == '`' {
+    for byte in content.bytes() {
+        if byte == b'\x60' {
             cur_run += 1;
             if cur_run > max_run {
                 max_run = cur_run;
@@ -284,7 +284,7 @@ fn emit_pre(el: ElementRef<'_>, state: &mut State) {
     state.ensure_newlines(2);
     // Check if direct child is <code> for fenced blocks
     let lang = extract_language(el);
-    let lang_str = lang.as_deref().unwrap_or("");
+    let lang_str = lang.unwrap_or("");
     // Collect the pre content into a scratch buffer first so we can
     // determine the required fence length (must exceed any backtick run).
     let mut scratch = State {
