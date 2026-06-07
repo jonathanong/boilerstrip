@@ -301,6 +301,18 @@ mod tests {
     }
 
     #[test]
+    fn extract_lang_trims_whitespace() {
+        let doc = Html::parse_document("<html lang=\"  en-US \"></html>");
+        assert_eq!(extract_lang(&doc), Some("en-US".to_string()));
+    }
+
+    #[test]
+    fn extract_lang_preserves_casing() {
+        let doc = Html::parse_document("<html lang=\"en-US\"></html>");
+        assert_eq!(extract_lang(&doc), Some("en-US".to_string()));
+    }
+
+    #[test]
     fn extract_link_tags_excludes_stylesheet_and_preload() {
         let doc = Html::parse_document(
             r#"<html><head>
