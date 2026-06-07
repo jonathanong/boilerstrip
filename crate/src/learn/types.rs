@@ -201,11 +201,15 @@ impl SnippetCandidate {
     pub fn record(&mut self, page_index: usize, snippet: String, selectors: &HashSet<String>) {
         self.pages_seen.insert(page_index);
         for selector in selectors {
-            self.selectors_seen.insert(selector.clone());
-            self.selector_pages
-                .entry(selector.clone())
-                .or_default()
-                .insert(page_index);
+            if !self.selectors_seen.contains(selector) {
+                self.selectors_seen.insert(selector.clone());
+            }
+            if let Some(pages) = self.selector_pages.get_mut(selector) {
+                pages.insert(page_index);
+            } else {
+                self.selector_pages
+                    .insert(selector.clone(), HashSet::from([page_index]));
+            }
         }
         if snippet.len() > self.snippet.len() {
             self.snippet = snippet;
