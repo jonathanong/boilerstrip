@@ -281,6 +281,22 @@ mod tests {
     }
 
     #[test]
+    fn filter_links_removes_by_text_pattern_all_lowercase_ascii() {
+        let html = r#"<p><a href="/close">close</a> <a href="/keep">Keep</a></p>"#;
+        let result = filter_links(html, &["close".to_string()], &[]);
+        assert!(!result.contains(">close<"));
+        assert!(result.contains("Keep"));
+    }
+
+    #[test]
+    fn filter_links_removes_by_text_pattern_non_ascii() {
+        let html = r#"<p><a href="/close">Закрыть</a> <a href="/keep">Keep</a></p>"#;
+        let result = filter_links(html, &["закрыть".to_string()], &[]);
+        assert!(!result.contains("Закрыть"));
+        assert!(result.contains("Keep"));
+    }
+
+    #[test]
     fn filter_links_inplace_removes_by_text_pattern_case_insensitive() {
         let html = r#"<html><body><main><a href="/close">Close</a> <a href="/keep">Keep</a></main></body></html>"#;
         let mut document = Html::parse_document(html);
