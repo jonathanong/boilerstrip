@@ -1,0 +1,52 @@
+diff --git a/crate/src/convert/filter.rs b/crate/src/convert/filter.rs
+index 463ac12..c9447d3 100644
+--- a/crate/src/convert/filter.rs
++++ b/crate/src/convert/filter.rs
+@@ -318,26 +318,28 @@ mod tests {
+     }
+-}
+
+-#[test]
+-fn filter_links_removes_by_text_pattern_ascii_mixed_case() {
+-    let html = r#"<p><a href="/close">ClOsE</a> <a href="/keep">Keep</a></p>"#;
+-    let result = filter_links(html, &["close".to_string()], &[]);
+-    assert!(!result.contains("ClOsE"));
+-    assert!(result.contains("Keep"));
+-}
++    #[test]
++    fn filter_links_removes_by_text_pattern_ascii_mixed_case() {
++        let html = r#"<p><a href="/close">ClOsE</a> <a href="/keep">Keep</a></p>"#;
++        let result = filter_links(html, &["close".to_string()], &[]);
++        assert!(!result.contains("ClOsE"));
++        assert!(result.contains("Keep"));
++    }
+
+-#[test]
+-fn filter_links_removes_by_text_pattern_ascii_lower_case() {
+-    let html = r#"<p><a href="/close">close</a> <a href="/keep">keep</a></p>"#;
+-    let result = filter_links(html, &["close".to_string()], &[]);
+-    assert!(!result.contains(">close<"));
+-    assert!(result.contains(">keep<"));
+-}
++    #[test]
++    fn filter_links_removes_by_text_pattern_ascii_lower_case() {
++        let html = r#"<p><a href="/close">close</a> <a href="/keep">keep</a></p>"#;
++        let result = filter_links(html, &["close".to_string()], &[]);
++        assert!(!result.contains(">close<"));
++        assert!(result.contains(">keep<"));
++    }
+
+-#[test]
+-fn filter_links_removes_by_text_pattern_unicode() {
+-    let html = r#"<p><a href="/close">Cłose</a> <a href="/keep">Keep</a></p>"#;
+-    let result = filter_links(html, &["cłose".to_string()], &[]);
+-    assert!(!result.contains("Cłose"));
+-    assert!(result.contains("Keep"));
++    #[test]
++    fn filter_links_removes_by_text_pattern_unicode() {
++        let html = r#"<p><a href="/close">Cłose</a> <a href="/keep">Keep</a></p>"#;
++        let result = filter_links(html, &["cłose".to_string()], &[]);
++        assert!(!result.contains("Cłose"));
++        assert!(result.contains("Keep"));
++    }
+ }
