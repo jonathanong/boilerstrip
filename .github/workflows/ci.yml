@@ -93,6 +93,7 @@ jobs:
           files: target/llvm-cov/lcov.info
           flags: rust
           fail_ci_if_error: true
+          version: v11.2.7
 
   bench:
     name: Bench
