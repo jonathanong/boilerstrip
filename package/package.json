@@ -1,6 +1,6 @@
 {
   "name": "boilerstrip",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Learn site boilerplate selectors from a page set and convert HTML to Markdown",
   "main": "index.js",
   "types": "index.d.ts",
