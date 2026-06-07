@@ -152,7 +152,11 @@ pub(super) fn shared_selectors_for_samples(
     let mut counts: HashMap<String, usize> = HashMap::new();
     for sample in samples {
         for selector in &sample.selectors {
-            *counts.entry(selector.clone()).or_insert(0) += 1;
+            if let Some(count) = counts.get_mut(selector) {
+                *count += 1;
+            } else {
+                counts.insert(selector.clone(), 1);
+            }
         }
     }
     counts
