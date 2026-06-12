@@ -312,6 +312,46 @@ mod tests {
     }
 
     #[test]
+    fn learn_config_all_defaults_are_applied() {
+        let options = LearnOptions::default();
+        let cfg = LearnConfig::from_options(&options);
+
+        assert_eq!(
+            cfg.max_selector_matches_per_page,
+            MAX_SELECTOR_MATCHES_PER_PAGE
+        );
+        assert_eq!(
+            cfg.min_selector_average_stable_ratio,
+            MIN_SELECTOR_AVERAGE_STABLE_RATIO
+        );
+        assert_eq!(
+            cfg.min_selector_per_page_stable_ratio,
+            MIN_SELECTOR_PER_PAGE_STABLE_RATIO
+        );
+        assert_eq!(cfg.min_snippet_text_length, MIN_SNIPPET_TEXT_LENGTH);
+        assert_eq!(cfg.max_snippet_text_length, MAX_SNIPPET_TEXT_LENGTH);
+    }
+
+    #[test]
+    fn learn_config_all_overrides_are_applied() {
+        let options = LearnOptions {
+            max_selector_matches_per_page: Some(100),
+            min_selector_average_stable_ratio: Some(0.9),
+            min_selector_per_page_stable_ratio: Some(0.8),
+            min_snippet_text_length: Some(10),
+            max_snippet_text_length: Some(500),
+            ..Default::default()
+        };
+        let cfg = LearnConfig::from_options(&options);
+
+        assert_eq!(cfg.max_selector_matches_per_page, 100);
+        assert_eq!(cfg.min_selector_average_stable_ratio, 0.9);
+        assert_eq!(cfg.min_selector_per_page_stable_ratio, 0.8);
+        assert_eq!(cfg.min_snippet_text_length, 10);
+        assert_eq!(cfg.max_snippet_text_length, 500);
+    }
+
+    #[test]
     fn learn_config_overrides_defaults() {
         // A selector that matches 25 times (> default 20) is accepted when the
         // override raises the cap.
