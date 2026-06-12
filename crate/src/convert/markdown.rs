@@ -494,28 +494,22 @@ fn emit_table(el: ElementRef<'_>, state: &mut State) {
 
 fn emit_thead(el: ElementRef<'_>, state: &mut State) {
     // html5ever always nests <thead> inside <table>, so table_state is Some here.
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: thead outside table")
-        .in_head = true;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = true;
+    }
     for child in (*el).children() {
         emit_node(child, state);
     }
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: thead outside table")
-        .in_head = false;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = false;
+    }
 }
 
 fn emit_tbody(el: ElementRef<'_>, state: &mut State) {
     // html5ever always nests these inside <table>, so table_state is Some here.
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: tbody/tfoot outside table")
-        .in_head = false;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = false;
+    }
     for child in (*el).children() {
         emit_node(child, state);
     }
