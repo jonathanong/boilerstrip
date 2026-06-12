@@ -364,9 +364,7 @@ mod tests {
 
     #[test]
     fn extract_canonical_url_missing_href() {
-        let doc = Html::parse_document(
-            r#"<html><head><link rel="canonical" /></head></html>"#,
-        );
+        let doc = Html::parse_document(r#"<html><head><link rel="canonical" /></head></html>"#);
         assert_eq!(extract_canonical_url(&doc), None);
     }
 
