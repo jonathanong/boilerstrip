@@ -22,19 +22,7 @@ pub(super) fn collect_breadth_first_snippet_candidates(
     queue.push_back(Vec::<usize>::new());
 
     while let Some(path) = queue.pop_front() {
-        let mut samples = Vec::new();
-        for (page_index, document) in documents.iter().enumerate() {
-            if let Some(element) = resolve_element_by_path(document, &path) {
-                let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
-                samples.push(PathNodeSample {
-                    page_index,
-                    fingerprint: normalized_text_fingerprint(&text),
-                    text,
-                    snippet: element.html(),
-                    selectors: selector_candidates(&element),
-                });
-            }
-        }
+        let samples = extract_samples_for_path(&documents, &path);
 
         let shared_selectors = shared_selectors_for_samples(&samples);
         let shared_fingerprint = shared_fingerprint_for_samples(&samples, min_shared_pages);
@@ -82,6 +70,26 @@ pub(super) fn collect_breadth_first_snippet_candidates(
     }
 
     candidates
+}
+
+pub(super) fn extract_samples_for_path(
+    documents: &[Html],
+    path: &[usize],
+) -> Vec<PathNodeSample> {
+    let mut samples = Vec::new();
+    for (page_index, document) in documents.iter().enumerate() {
+        if let Some(element) = resolve_element_by_path(document, path) {
+            let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
+            samples.push(PathNodeSample {
+                page_index,
+                fingerprint: normalized_text_fingerprint(&text),
+                text,
+                snippet: element.html(),
+                selectors: selector_candidates(&element),
+            });
+        }
+    }
+    samples
 }
 
 pub(super) fn shared_fingerprint_for_samples(
