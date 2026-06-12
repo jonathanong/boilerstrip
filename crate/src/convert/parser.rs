@@ -363,6 +363,12 @@ mod tests {
     }
 
     #[test]
+    fn extract_canonical_url_missing_href() {
+        let doc = Html::parse_document(r#"<html><head><link rel="canonical" /></head></html>"#);
+        assert_eq!(extract_canonical_url(&doc), None);
+    }
+
+    #[test]
     fn extract_link_tags_skips_link_without_href() {
         let doc = Html::parse_document(r#"<html><head><link rel="canonical"></head></html>"#);
         let links = extract_link_tags(&doc, None);
