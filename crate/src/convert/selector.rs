@@ -13,6 +13,9 @@ static SELECTOR_BODY: LazyLock<Selector> =
 /// Uses DOM-based removal so serialization differences between the input and
 /// scraper's output don't cause silent no-ops.
 pub fn remove_elements(html: &str, tags: &[&str]) -> String {
+    if tags.is_empty() {
+        return html.to_string();
+    }
     crate::util::remove_matching(html, |el| tags.iter().any(|t| el.value().name() == *t))
 }
 
@@ -213,6 +216,27 @@ mod tests {
     fn remove_by_css_selectors_skips_invalid_combinator_syntax() {
         let html = "<p>Keep</p>";
         let result = remove_by_css_selectors(html, Some(&[">>>".to_string()]));
+        assert_eq!(result, html);
+    }
+
+    #[test]
+    fn remove_elements_returns_unchanged_when_tags_empty() {
+        let html = "<p>Keep</p>";
+        let result = remove_elements(html, &[]);
+        assert_eq!(result, html);
+    }
+
+    #[test]
+    fn remove_elements_handles_empty_html() {
+        let html = "";
+        let result = remove_elements(html, &["p"]);
+        assert_eq!(result, html);
+    }
+
+    #[test]
+    fn remove_elements_handles_empty_string_tag() {
+        let html = "<p>Keep</p>";
+        let result = remove_elements(html, &[""]);
         assert_eq!(result, html);
     }
 }
