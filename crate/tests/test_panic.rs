@@ -1,5 +1,5 @@
-use scraper::Html;
 use boilerstrip::convert::markdown::element_to_markdown;
+use scraper::Html;
 
 #[test]
 fn test_thead_tbody_outside_table_no_panic() {
@@ -12,6 +12,10 @@ fn test_thead_tbody_outside_table_no_panic() {
     for html in htmls {
         let fragment = Html::parse_fragment(html);
         let md = element_to_markdown(fragment.root_element());
-        assert_eq!(md.trim(), "Hello", "Should safely extract text without panicking");
+        assert_eq!(
+            md.trim(),
+            "Hello",
+            "Should safely extract text without panicking"
+        );
     }
 }
