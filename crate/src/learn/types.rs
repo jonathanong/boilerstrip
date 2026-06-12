@@ -316,9 +316,18 @@ mod tests {
         let options = LearnOptions::default();
         let cfg = LearnConfig::from_options(&options);
 
-        assert_eq!(cfg.max_selector_matches_per_page, MAX_SELECTOR_MATCHES_PER_PAGE);
-        assert_eq!(cfg.min_selector_average_stable_ratio, MIN_SELECTOR_AVERAGE_STABLE_RATIO);
-        assert_eq!(cfg.min_selector_per_page_stable_ratio, MIN_SELECTOR_PER_PAGE_STABLE_RATIO);
+        assert_eq!(
+            cfg.max_selector_matches_per_page,
+            MAX_SELECTOR_MATCHES_PER_PAGE
+        );
+        assert_eq!(
+            cfg.min_selector_average_stable_ratio,
+            MIN_SELECTOR_AVERAGE_STABLE_RATIO
+        );
+        assert_eq!(
+            cfg.min_selector_per_page_stable_ratio,
+            MIN_SELECTOR_PER_PAGE_STABLE_RATIO
+        );
         assert_eq!(cfg.min_snippet_text_length, MIN_SNIPPET_TEXT_LENGTH);
         assert_eq!(cfg.max_snippet_text_length, MAX_SNIPPET_TEXT_LENGTH);
     }
