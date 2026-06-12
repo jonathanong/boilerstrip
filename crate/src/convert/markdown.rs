@@ -493,29 +493,21 @@ fn emit_table(el: ElementRef<'_>, state: &mut State) {
 }
 
 fn emit_thead(el: ElementRef<'_>, state: &mut State) {
-    // html5ever always nests <thead> inside <table>, so table_state is Some here.
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: thead outside table")
-        .in_head = true;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = true;
+    }
     for child in (*el).children() {
         emit_node(child, state);
     }
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: thead outside table")
-        .in_head = false;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = false;
+    }
 }
 
 fn emit_tbody(el: ElementRef<'_>, state: &mut State) {
-    // html5ever always nests these inside <table>, so table_state is Some here.
-    state
-        .table_state
-        .as_mut()
-        .expect("BUG: tbody/tfoot outside table")
-        .in_head = false;
+    if let Some(ts) = state.table_state.as_mut() {
+        ts.in_head = false;
+    }
     for child in (*el).children() {
         emit_node(child, state);
     }
@@ -1043,5 +1035,18 @@ mod tests {
         // tr root → children are <td>/<th> → emit_element("td"/"th", table_state=None)
         let tr = doc.select(&Selector::parse("tr").unwrap()).next().unwrap();
         let _ = element_to_markdown(tr);
+    }
+
+    #[test]
+    fn malformed_table_subelements_do_not_panic() {
+        // When <thead> or <tbody> appear without an enclosing <table> (e.g. malformed HTML),
+        // table_state is None.  The if-let-Some guards in emit_thead/emit_tbody must handle this gracefully.
+        let html = "<div><template><thead><tr><td>A</td></tr></thead><tbody><tr><td>B</td></tr></tbody></template></div>";
+        let doc = Html::parse_fragment(html);
+        let template = doc
+            .select(&Selector::parse("template").unwrap())
+            .next()
+            .unwrap();
+        let _ = element_to_markdown(template);
     }
 }
