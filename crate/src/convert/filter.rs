@@ -433,4 +433,13 @@ mod tests {
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
     }
+
+    #[test]
+    fn filter_links_inplace_keeps_when_empty_pattern() {
+        let html = r#"<html><body><p><a href="/close">close</a></p></body></html>"#;
+        let mut document = Html::parse_document(html);
+        filter_links_inplace(&mut document, &[], &[]);
+        let result = crate::util::serialize_fragment_body(&document);
+        assert!(result.contains(">close<"));
+    }
 }
