@@ -22,66 +22,87 @@ pub(super) fn collect_breadth_first_snippet_candidates(
     queue.push_back(Vec::<usize>::new());
 
     while let Some(path) = queue.pop_front() {
-        let mut samples = Vec::new();
-        for (page_index, document) in documents.iter().enumerate() {
-            if let Some(element) = resolve_element_by_path(document, &path) {
-                let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
-                samples.push(PathNodeSample {
-                    page_index,
-                    fingerprint: normalized_text_fingerprint(&text),
-                    text,
-                    snippet: element.html(),
-                    selectors: selector_candidates(&element),
-                });
-            }
-        }
-
-        let shared_selectors = shared_selectors_for_samples(&samples);
-        let shared_fingerprint = shared_fingerprint_for_samples(&samples, min_shared_pages);
-        let is_match = !shared_selectors.is_empty() || shared_fingerprint.is_some();
-
-        if let Some(fingerprint) = shared_fingerprint.filter(|_| !path.is_empty()) {
-            // Use the sample with the longest text for both the boilerplate gate and snippet.
-            let representative = samples.iter().max_by_key(|s| s.text.len());
-            if representative.is_some_and(|s| {
-                is_boilerplate_text_candidate(&s.text, boilerplate_patterns, config)
-            }) {
-                let candidate = candidates.entry(fingerprint).or_default();
-                for sample in samples {
-                    candidate.record(sample.page_index, sample.snippet, &sample.selectors);
-                }
-                // matched — do not recurse into children
-                continue;
-            }
-        }
-
-        if path.is_empty() || !is_match {
-            let mut child_index_counts = HashMap::<usize, usize>::new();
-            for element in documents
-                .iter()
-                .filter_map(|document| resolve_element_by_path(document, &path))
-            {
-                for (child_index, _) in element_children(element).enumerate() {
-                    *child_index_counts.entry(child_index).or_insert(0) += 1;
-                }
-            }
-
-            let mut next_child_indices = child_index_counts
-                .into_iter()
-                .filter(|(_, count)| *count >= min_shared_pages)
-                .map(|(child_index, _)| child_index)
-                .collect::<Vec<_>>();
-            next_child_indices.sort_unstable();
-
-            for child_index in next_child_indices {
-                let mut child_path = path.clone();
-                child_path.push(child_index);
-                queue.push_back(child_path);
-            }
-        }
+        process_path(
+            &path,
+            &documents,
+            min_shared_pages,
+            boilerplate_patterns,
+            config,
+            &mut candidates,
+            &mut queue,
+        );
     }
 
     candidates
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_path(
+    path: &[usize],
+    documents: &[Html],
+    min_shared_pages: usize,
+    boilerplate_patterns: &[String],
+    config: &LearnConfig,
+    candidates: &mut HashMap<String, SnippetCandidate>,
+    queue: &mut VecDeque<Vec<usize>>,
+) {
+    let mut samples = Vec::new();
+    for (page_index, document) in documents.iter().enumerate() {
+        if let Some(element) = resolve_element_by_path(document, path) {
+            let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
+            samples.push(PathNodeSample {
+                page_index,
+                fingerprint: normalized_text_fingerprint(&text),
+                text,
+                snippet: element.html(),
+                selectors: selector_candidates(&element),
+            });
+        }
+    }
+
+    let shared_selectors = shared_selectors_for_samples(&samples);
+    let shared_fingerprint = shared_fingerprint_for_samples(&samples, min_shared_pages);
+    let is_match = !shared_selectors.is_empty() || shared_fingerprint.is_some();
+
+    if let Some(fingerprint) = shared_fingerprint.filter(|_| !path.is_empty()) {
+        // Use the sample with the longest text for both the boilerplate gate and snippet.
+        let representative = samples.iter().max_by_key(|s| s.text.len());
+        if representative
+            .is_some_and(|s| is_boilerplate_text_candidate(&s.text, boilerplate_patterns, config))
+        {
+            let candidate = candidates.entry(fingerprint).or_default();
+            for sample in samples {
+                candidate.record(sample.page_index, sample.snippet, &sample.selectors);
+            }
+            // matched — do not recurse into children
+            return;
+        }
+    }
+
+    if path.is_empty() || !is_match {
+        let mut child_index_counts = HashMap::<usize, usize>::new();
+        for element in documents
+            .iter()
+            .filter_map(|document| resolve_element_by_path(document, path))
+        {
+            for (child_index, _) in element_children(element).enumerate() {
+                *child_index_counts.entry(child_index).or_insert(0) += 1;
+            }
+        }
+
+        let mut next_child_indices = child_index_counts
+            .into_iter()
+            .filter(|(_, count)| *count >= min_shared_pages)
+            .map(|(child_index, _)| child_index)
+            .collect::<Vec<_>>();
+        next_child_indices.sort_unstable();
+
+        for child_index in next_child_indices {
+            let mut child_path = path.to_vec();
+            child_path.push(child_index);
+            queue.push_back(child_path);
+        }
+    }
 }
 
 pub(super) fn shared_fingerprint_for_samples(
