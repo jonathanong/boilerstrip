@@ -72,10 +72,7 @@ pub(super) fn collect_breadth_first_snippet_candidates(
     candidates
 }
 
-pub(super) fn extract_samples_for_path(
-    documents: &[Html],
-    path: &[usize],
-) -> Vec<PathNodeSample> {
+pub(super) fn extract_samples_for_path(documents: &[Html], path: &[usize]) -> Vec<PathNodeSample> {
     let mut samples = Vec::new();
     for (page_index, document) in documents.iter().enumerate() {
         if let Some(element) = resolve_element_by_path(document, path) {
