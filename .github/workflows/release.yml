@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 420
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
         with:
           ref: main
 
@@ -71,7 +71,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 0
           ref: main
@@ -86,7 +86,7 @@ jobs:
           node-version: 22
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.0.8
         with:
           version: 11
 
@@ -179,7 +179,7 @@ jobs:
     timeout-minutes: 420
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
         with:
           ref: v${{ needs.prepare.outputs.version }}
 
@@ -201,7 +201,7 @@ jobs:
           node-version: 22
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.0.8
         with:
           version: 11
 
@@ -230,7 +230,7 @@ jobs:
     timeout-minutes: 420
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
         with:
           ref: v${{ needs.prepare.outputs.version }}
 
@@ -244,7 +244,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v6.0.8
         with:
           version: 11
 
