@@ -302,6 +302,7 @@ mod tests {
         assert!(!is_safe_url("\x00javascript:alert(1)"));
         assert!(!is_safe_url("javascript\x09:alert(1)"));
         assert!(!is_safe_url("javascript :alert(1)"));
+        assert!(!is_safe_url("invalidhttp://"));
     }
 
     #[test]
