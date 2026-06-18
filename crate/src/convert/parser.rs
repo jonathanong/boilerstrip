@@ -534,6 +534,24 @@ mod tests {
     }
 
     #[test]
+    fn parse_html_parses_valid_html() {
+        let doc =
+            parse_html("<html><head><title>Test</title></head><body><p>Hello</p></body></html>");
+        assert_eq!(extract_title(&doc), Some("Test".to_string()));
+        let body_selector = Selector::parse("body p").unwrap();
+        let p = doc.select(&body_selector).next().unwrap();
+        assert_eq!(p.text().collect::<String>(), "Hello");
+    }
+
+    #[test]
+    fn parse_html_handles_empty_string() {
+        let doc = parse_html("");
+        let html_selector = Selector::parse("html").unwrap();
+        let html = doc.select(&html_selector).next();
+        assert!(html.is_some());
+    }
+
+    #[test]
     fn parse_html_alias_works() {
         let doc = parse_html("<html><head><title>T</title></head></html>");
         assert_eq!(extract_title(&doc), Some("T".to_string()));
