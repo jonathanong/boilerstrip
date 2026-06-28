@@ -69,16 +69,9 @@ pub fn filter_links_inplace(
     link_text_content_to_remove: &[String],
     link_hrefs_to_remove: &[String],
 ) {
-    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
-        .iter()
-        .map(|s| s.to_lowercase())
-        .collect();
-
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| {
-            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
-        })
+        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -117,15 +110,9 @@ pub fn filter_links(
     link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
-    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
-        .iter()
-        .map(|s| s.to_lowercase())
-        .collect();
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| {
-            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
-        })
+        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -138,13 +125,39 @@ pub fn filter_links(
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns_lower: &[String]) -> bool {
-    if patterns_lower.is_empty() {
+fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
+    if patterns.is_empty() {
         return false;
     }
 
-    let text_lower = text.to_lowercase();
-    patterns_lower.iter().any(|p| text_lower.contains(p))
+    // Fast path: if both text and patterns are ASCII, we can do a case-insensitive
+    // substring search without allocating a new String for `text_lower` or `pattern`.
+    if text.is_ascii() {
+        let text_bytes = text.as_bytes();
+        patterns.iter().any(|p| {
+            if p.is_ascii() {
+                let p_bytes = p.as_bytes();
+                if p_bytes.is_empty() {
+                    return true;
+                }
+                if p_bytes.len() > text_bytes.len() {
+                    return false;
+                }
+                text_bytes
+                    .windows(p_bytes.len())
+                    .any(|w| w.eq_ignore_ascii_case(p_bytes))
+            } else {
+                // Fallback for non-ASCII pattern against ASCII text
+                text.to_lowercase().contains(&p.to_lowercase())
+            }
+        })
+    } else {
+        // Fallback for non-ASCII text
+        let text_lower = text.to_lowercase();
+        patterns
+            .iter()
+            .any(|p| text_lower.contains(&p.to_lowercase()))
+    }
 }
 
 fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
