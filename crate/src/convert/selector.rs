@@ -26,18 +26,20 @@ pub fn remove_by_css_selectors(html: &str, selectors: Option<&[String]>) -> Stri
     let Some(selectors) = selectors.filter(|s| !s.is_empty()) else {
         return html.to_string();
     };
-    let parsed: Vec<Selector> = selectors
+    let mut parsed = selectors
         .iter()
         .filter_map(|s| Selector::parse(s).ok())
-        .collect();
-    if parsed.is_empty() {
+        .peekable();
+    if parsed.peek().is_none() {
         return html.to_string();
     }
     let mut fragment = Html::parse_fragment(html);
-    let ids: std::collections::HashSet<_> = parsed
-        .iter()
-        .flat_map(|sel| fragment.select(sel).map(|el| el.id()))
-        .collect();
+    let mut ids = std::collections::HashSet::new();
+    for sel in parsed {
+        for el in fragment.select(&sel) {
+            ids.insert(el.id());
+        }
+    }
     for id in ids {
         fragment
             .tree
