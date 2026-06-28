@@ -148,7 +148,7 @@ fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
                     .any(|w| w.eq_ignore_ascii_case(p_bytes))
             } else {
                 // Fallback for non-ASCII pattern against ASCII text
-                text.to_lowercase().contains(&p.to_lowercase())
+                false
             }
         })
     } else {
@@ -445,5 +445,29 @@ mod tests {
         let html = r#"<p><a href="/close">close</a></p>"#;
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
+    }
+
+    #[test]
+    fn filter_links_handles_empty_pattern_in_text() {
+        let html = r#"<p><a href="/close">close</a></p>"#;
+        // An empty pattern should effectively be ignored or removed depending on logic.
+        // Wait, should_remove_by_text returns true if pattern is empty AFTER the initial guard?
+        // The initial guard is:
+        // if patterns.is_empty() { return false; }
+        // But if `patterns` contains `""` as an element:
+        // patterns.iter().any(|p| ...)
+        // A pattern of `""` will cause `is_empty()` to be true and return `true`, meaning it removes it.
+        let result = filter_links(html, &["".to_string()], &[]);
+        // original logic: text.to_lowercase().contains("") returns true.
+        // so it removes everything.
+        assert!(!result.contains(">close<"));
+        assert!(!result.contains("<a"));
+    }
+
+    #[test]
+    fn filter_links_handles_pattern_longer_than_text() {
+        let html = r#"<p><a href="/close">a</a></p>"#;
+        let result = filter_links(html, &["ab".to_string()], &[]);
+        assert!(result.contains(">a<"));
     }
 }
