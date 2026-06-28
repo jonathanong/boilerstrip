@@ -175,17 +175,20 @@ impl SelectorStats {
     }
 
     fn shared_fingerprints(&self, min_shared_pages: usize) -> HashSet<String> {
-        let mut page_counts: HashMap<String, usize> = HashMap::new();
+        let mut page_counts: HashMap<&String, usize> = HashMap::new();
         for fingerprint_matches in self.page_fingerprint_matches.values() {
             for fingerprint in fingerprint_matches.keys() {
-                *page_counts.entry(fingerprint.clone()).or_insert(0) += 1;
+                *page_counts.entry(fingerprint).or_insert(0) += 1;
             }
         }
-        page_counts
-            .into_iter()
-            .filter(|(_, count)| *count >= min_shared_pages)
-            .map(|(fp, _)| fp)
-            .collect()
+
+        let mut result = HashSet::new();
+        for (fp, count) in page_counts {
+            if count >= min_shared_pages {
+                result.insert(fp.clone());
+            }
+        }
+        result
     }
 }
 
