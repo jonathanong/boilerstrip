@@ -47,17 +47,25 @@ pub fn apply_text_density_filter(document: &Html) -> Option<ElementRef<'_>> {
 
 fn calculate_text_density_score(element: &ElementRef) -> i32 {
     let text: String = element.text().collect();
-    let text_length = text.len() as i32;
+    let text_length = text.len();
 
-    let mut link_text_length = 0i32;
-    let mut link_count = 0i32;
+    let mut link_text_length = 0;
+    let mut link_count = 0;
     for link in element.select(&SELECTOR_A) {
         let link_text: String = link.text().collect();
-        link_text_length += link_text.len() as i32;
+        link_text_length += link_text.len();
         link_count += 1;
     }
 
-    text_length - link_text_length - (link_count * TEXT_DENSITY_LINK_PENALTY)
+    compute_density_score(text_length, link_text_length, link_count)
+}
+
+fn compute_density_score(text_len: usize, link_text_len: usize, link_count: usize) -> i32 {
+    let raw_score = text_len as i128
+        - link_text_len as i128
+        - (link_count as i128 * TEXT_DENSITY_LINK_PENALTY as i128);
+
+    raw_score.clamp(i32::MIN as i128, i32::MAX as i128) as i32
 }
 
 /// Remove `<a>` and `<button>` elements in-place on an already-parsed document.
@@ -508,5 +516,43 @@ mod tests {
         let doc = Html::parse_document(html);
         let selected = apply_text_density_filter(&doc).expect("main should be selected");
         assert_eq!(selected.value().name(), "main");
+    }
+
+    #[test]
+    fn compute_density_score_handles_normal_values() {
+        let score = compute_density_score(100, 20, 1); // 100 - 20 - 20 = 60
+        assert_eq!(score, 60);
+    }
+
+    #[test]
+    fn compute_density_score_handles_extremely_large_text() {
+        // text_len exceeds i32::MAX. Should clamp to i32::MAX.
+        let score = compute_density_score(usize::MAX, 0, 0);
+        assert_eq!(score, i32::MAX);
+    }
+
+    #[test]
+    fn compute_density_score_clamps_after_full_formula() {
+        // A tiny link adjustment should not change ordering relative to overflowed text lengths.
+        let score = compute_density_score(i32::MAX as usize + 1_000, 500, 0);
+        assert_eq!(score, i32::MAX);
+    }
+
+    #[test]
+    fn compute_density_score_handles_extremely_large_links() {
+        let score = compute_density_score(1000, 0, usize::MAX);
+        assert_eq!(score, i32::MIN);
+    }
+
+    #[test]
+    fn compute_density_score_handles_extremely_large_link_text() {
+        let score = compute_density_score(1000, usize::MAX, 0);
+        assert_eq!(score, i32::MIN);
+    }
+
+    #[test]
+    fn compute_density_score_handles_everything_extremely_large() {
+        let score = compute_density_score(usize::MAX, usize::MAX, usize::MAX);
+        assert_eq!(score, i32::MIN);
     }
 }
