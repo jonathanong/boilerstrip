@@ -451,3 +451,12 @@ mod tests {
         assert!(result.contains(">close<"));
     }
 }
+
+    #[test]
+    fn text_density_filter_scores_nested_links() {
+        let doc = Html::parse_document(
+            "<html><body><main><a href=\"#\">Nested <a>link</a></a></main><article>Dense article text wins.</article></body></html>",
+        );
+        let selected = apply_text_density_filter(&doc).expect("article should be selected");
+        assert_eq!(selected.value().name(), "article");
+    }
