@@ -431,4 +431,11 @@ mod tests {
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
     }
+
+    #[test]
+    fn filter_links_removes_when_pattern_is_empty_string() {
+        let html = r#"<p><a href="/close">close</a></p>"#;
+        let result = filter_links(html, &["".to_string()], &[]);
+        assert!(!result.contains(">close<"));
+    }
 }
