@@ -1,19 +1,22 @@
 use scraper::{Html, Selector};
 use serde_json::{Map, Value};
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 const DEFAULT_ALTERNATE_LINK_TYPE: &str = "unspecified";
 
 /// Link rel values that are resource hints or stylesheets, not page metadata.
-const EXCLUDED_REL_VALUES: &[&str] = &[
-    "dns-prefetch",
-    "preconnect",
-    "prefetch",
-    "prerender",
-    "preload",
-    "modulepreload",
-    "stylesheet",
-];
+static EXCLUDED_REL_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        "dns-prefetch",
+        "preconnect",
+        "prefetch",
+        "prerender",
+        "preload",
+        "modulepreload",
+        "stylesheet",
+    ])
+});
 
 static SELECTOR_TITLE: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("title").expect("BUG: invalid 'title' selector"));
@@ -91,7 +94,7 @@ pub fn extract_link_tags(
     link_rel_tokens_to_remove: Option<&[String]>,
 ) -> Map<String, Value> {
     let mut links = Map::new();
-    let custom_remove: Vec<String> = link_rel_tokens_to_remove
+    let custom_remove: HashSet<String> = link_rel_tokens_to_remove
         .map(|v| v.iter().map(|t| t.to_lowercase()).collect())
         .unwrap_or_default();
 
