@@ -11,13 +11,13 @@ pub fn strip_elements(html: &str, remove_selectors: &[String]) -> Vec<u8> {
     strip_elements_with_iter(html, remove_selectors.iter())
 }
 
-pub(crate) fn strip_elements_with_iter<I, S>(html: &str, remove_selectors: I) -> Vec<u8>
+fn build_removal_handlers<'a, I, S>(
+    remove_selectors: I,
+) -> Vec<(Cow<'a, lol_html::Selector>, ElementContentHandlers<'a>)>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let mut output = Vec::with_capacity(html.len());
-
     let mut element_content_handlers: Vec<(
         Cow<'_, lol_html::Selector>,
         ElementContentHandlers<'_>,
@@ -44,6 +44,17 @@ where
             ));
         }
     }
+
+    element_content_handlers
+}
+
+pub(crate) fn strip_elements_with_iter<I, S>(html: &str, remove_selectors: I) -> Vec<u8>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut output = Vec::with_capacity(html.len());
+    let element_content_handlers = build_removal_handlers(remove_selectors);
 
     let mut rewriter = HtmlRewriter::new(
         Settings {
