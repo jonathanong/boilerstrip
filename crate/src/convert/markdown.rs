@@ -164,38 +164,75 @@ fn emit_element(el: ElementRef<'_>, state: &mut State) {
 
     let name = el.value().name();
 
+    let handled = try_emit_metadata(name)
+        || try_emit_block(name, el, state)
+        || try_emit_inline(name, el, state)
+        || try_emit_list(name, el, state)
+        || try_emit_table_element(name, el, state);
+
+    if !handled {
+        emit_fallback(el, state);
+    }
+
+    state.depth -= 1;
+}
+
+fn try_emit_metadata(name: &str) -> bool {
+    matches!(name, "script" | "style" | "head" | "noscript" | "template")
+}
+
+fn try_emit_block(name: &str, el: ElementRef<'_>, state: &mut State) -> bool {
     match name {
-        "script" | "style" | "head" | "noscript" | "template" => (),
         "br" => emit_br(state),
         "hr" => emit_hr(state),
-        "img" => emit_img(el, state),
         "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => emit_heading(name, el, state),
         "p" => emit_p(el, state),
         "pre" => emit_pre(el, state),
+        "blockquote" => emit_blockquote(el, state),
+        "div" | "section" | "article" | "main" | "aside" | "header" | "footer" | "nav"
+        | "figure" | "figcaption" | "details" | "summary" | "body" | "html" => {
+            emit_block_container(el, state)
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn try_emit_inline(name: &str, el: ElementRef<'_>, state: &mut State) -> bool {
+    match name {
+        "img" => emit_img(el, state),
         "code" => emit_code(el, state),
         "strong" | "b" => emit_strong(el, state),
         "em" | "i" => emit_em(el, state),
         "del" | "s" | "strike" => emit_del(el, state),
         "a" => emit_a(el, state),
+        "span" | "abbr" | "cite" | "kbd" | "mark" | "q" | "small" | "sub" | "sup" | "time"
+        | "var" | "wbr" | "bdi" | "bdo" | "u" | "ins" | "label" => emit_inline_container(el, state),
+        _ => return false,
+    }
+    true
+}
+
+fn try_emit_list(name: &str, el: ElementRef<'_>, state: &mut State) -> bool {
+    match name {
         "ul" => emit_ul(el, state),
         "ol" => emit_ol(el, state),
         "li" => emit_li(el, state),
-        "blockquote" => emit_blockquote(el, state),
+        _ => return false,
+    }
+    true
+}
+
+fn try_emit_table_element(name: &str, el: ElementRef<'_>, state: &mut State) -> bool {
+    match name {
         "table" => emit_table(el, state),
         "thead" => emit_thead(el, state),
         "tbody" | "tfoot" => emit_tbody(el, state),
         "tr" => emit_tr(el, state),
         "th" | "td" => emit_td(el, state),
-        "div" | "section" | "article" | "main" | "aside" | "header" | "footer" | "nav"
-        | "figure" | "figcaption" | "details" | "summary" | "body" | "html" => {
-            emit_block_container(el, state)
-        }
-        "span" | "abbr" | "cite" | "kbd" | "mark" | "q" | "small" | "sub" | "sup" | "time"
-        | "var" | "wbr" | "bdi" | "bdo" | "u" | "ins" | "label" => emit_inline_container(el, state),
-        _ => emit_fallback(el, state),
+        _ => return false,
     }
-
-    state.depth -= 1;
+    true
 }
 
 fn emit_br(state: &mut State) {
