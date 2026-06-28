@@ -7,6 +7,53 @@ use super::fingerprint::{normalize_whitespace, normalized_text_fingerprint};
 use super::selectors::{selector_candidates, shared_selectors_for_samples};
 use super::types::{LearnConfig, PathNodeSample, SnippetCandidate};
 
+fn collect_samples(documents: &[Html], path: &[usize]) -> Vec<PathNodeSample> {
+    let mut samples = Vec::new();
+    for (page_index, document) in documents.iter().enumerate() {
+        if let Some(element) = resolve_element_by_path(document, path) {
+            let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
+            samples.push(PathNodeSample {
+                page_index,
+                fingerprint: normalized_text_fingerprint(&text),
+                text,
+                snippet: element.html(),
+                selectors: selector_candidates(&element),
+            });
+        }
+    }
+    samples
+}
+
+fn expand_child_paths(
+    documents: &[Html],
+    path: &[usize],
+    min_shared_pages: usize,
+    queue: &mut VecDeque<Vec<usize>>,
+) {
+    let mut child_index_counts = HashMap::<usize, usize>::new();
+    for element in documents
+        .iter()
+        .filter_map(|document| resolve_element_by_path(document, path))
+    {
+        for (child_index, _) in element_children(element).enumerate() {
+            *child_index_counts.entry(child_index).or_insert(0) += 1;
+        }
+    }
+
+    let mut next_child_indices = child_index_counts
+        .into_iter()
+        .filter(|(_, count)| *count >= min_shared_pages)
+        .map(|(child_index, _)| child_index)
+        .collect::<Vec<_>>();
+    next_child_indices.sort_unstable();
+
+    for child_index in next_child_indices {
+        let mut child_path = path.to_vec();
+        child_path.push(child_index);
+        queue.push_back(child_path);
+    }
+}
+
 pub(super) fn collect_breadth_first_snippet_candidates(
     html_pages: &[String],
     min_shared_pages: usize,
@@ -22,19 +69,7 @@ pub(super) fn collect_breadth_first_snippet_candidates(
     queue.push_back(Vec::<usize>::new());
 
     while let Some(path) = queue.pop_front() {
-        let mut samples = Vec::new();
-        for (page_index, document) in documents.iter().enumerate() {
-            if let Some(element) = resolve_element_by_path(document, &path) {
-                let text = normalize_whitespace(&element.text().collect::<Vec<_>>().join(" "));
-                samples.push(PathNodeSample {
-                    page_index,
-                    fingerprint: normalized_text_fingerprint(&text),
-                    text,
-                    snippet: element.html(),
-                    selectors: selector_candidates(&element),
-                });
-            }
-        }
+        let samples = collect_samples(&documents, &path);
 
         let shared_selectors = shared_selectors_for_samples(&samples);
         let shared_fingerprint = shared_fingerprint_for_samples(&samples, min_shared_pages);
@@ -56,28 +91,7 @@ pub(super) fn collect_breadth_first_snippet_candidates(
         }
 
         if path.is_empty() || !is_match {
-            let mut child_index_counts = HashMap::<usize, usize>::new();
-            for element in documents
-                .iter()
-                .filter_map(|document| resolve_element_by_path(document, &path))
-            {
-                for (child_index, _) in element_children(element).enumerate() {
-                    *child_index_counts.entry(child_index).or_insert(0) += 1;
-                }
-            }
-
-            let mut next_child_indices = child_index_counts
-                .into_iter()
-                .filter(|(_, count)| *count >= min_shared_pages)
-                .map(|(child_index, _)| child_index)
-                .collect::<Vec<_>>();
-            next_child_indices.sort_unstable();
-
-            for child_index in next_child_indices {
-                let mut child_path = path.clone();
-                child_path.push(child_index);
-                queue.push_back(child_path);
-            }
+            expand_child_paths(&documents, &path, min_shared_pages, &mut queue);
         }
     }
 
