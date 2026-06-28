@@ -207,8 +207,9 @@ impl SnippetCandidate {
             if let Some(pages) = self.selector_pages.get_mut(selector) {
                 pages.insert(page_index);
             } else {
-                self.selector_pages
-                    .insert(selector.clone(), HashSet::from([page_index]));
+                let mut pages = HashSet::with_capacity(1);
+                pages.insert(page_index);
+                self.selector_pages.insert(selector.clone(), pages);
             }
         }
         if snippet.len() > self.snippet.len() {
