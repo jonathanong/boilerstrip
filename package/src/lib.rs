@@ -194,6 +194,12 @@ impl Task for ConvertTask {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let html = std::str::from_utf8(&self.html)
                 .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+
+            #[cfg(test)]
+            if html == "TRIGGER_PANIC" {
+                panic!("mock panic in compute");
+            }
+
             Ok(ConvertResult::from(boilerstrip::convert(
                 html,
                 &self.options,
@@ -295,5 +301,18 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(panic_message(&payload), "unknown panic");
+    }
+
+    #[test]
+    fn test_convert_task_panic_handling() {
+        let mut task = ConvertTask {
+            html: napi::bindgen_prelude::Buffer::from(b"TRIGGER_PANIC".to_vec()),
+            options: RustConvertOptions::default(),
+        };
+        use napi::Task;
+        let res = task.compute();
+        assert!(res.is_err());
+        let err = res.err().unwrap();
+        assert_eq!(err.reason, "boilerstrip panic: mock panic in compute");
     }
 }
