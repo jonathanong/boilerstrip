@@ -450,7 +450,6 @@ mod tests {
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
     }
-}
 
     #[test]
     fn text_density_filter_scores_nested_links() {
@@ -460,3 +459,4 @@ mod tests {
         let selected = apply_text_density_filter(&doc).expect("article should be selected");
         assert_eq!(selected.value().name(), "article");
     }
+}
