@@ -197,6 +197,18 @@ mod tests {
     }
 
     #[test]
+    fn text_density_filter_handles_exceptionally_large_text() {
+        // Construct a string large enough to be considered exceptionally large
+        // but small enough to not cause OOM on standard test runners (e.g. 50 MB)
+        let large_str = "a".repeat(50_000_000);
+        let html = format!("<html><body><main>{}</main></body></html>", large_str);
+        let doc = Html::parse_document(&html);
+
+        let selected = apply_text_density_filter(&doc).expect("main should be selected");
+        assert_eq!(selected.value().name(), "main");
+    }
+
+    #[test]
     fn text_density_filter_keeps_first_element_when_scores_tie() {
         let doc = Html::parse_document(
             "<html><body><main>Same length</main><article>Same length</article></body></html>",
