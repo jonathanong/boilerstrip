@@ -8,6 +8,9 @@ static SELECTOR_MAIN_ARTICLE_SECTION_DIV: LazyLock<Vec<Selector>> = LazyLock::ne
         .collect()
 });
 
+static SELECTOR_A: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("a").expect("BUG: invalid SELECTOR_A"));
+
 static SELECTOR_A_BUTTON: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("a, button").expect("BUG: invalid SELECTOR_A_BUTTON"));
 
@@ -43,37 +46,15 @@ pub fn apply_text_density_filter(document: &Html) -> Option<ElementRef<'_>> {
 }
 
 fn calculate_text_density_score(element: &ElementRef) -> i32 {
-    use ego_tree::iter::Edge;
+    let text: String = element.text().collect();
+    let text_length = text.len() as i32;
 
-    let mut text_length = 0i32;
     let mut link_text_length = 0i32;
     let mut link_count = 0i32;
-    let mut link_depth = 0i32;
-
-    for edge in element.traverse() {
-        match edge {
-            Edge::Open(node) => {
-                if let Some(el) = node.value().as_element() {
-                    if el.name() == "a" {
-                        link_depth += 1;
-                        link_count += 1;
-                    }
-                } else if let Some(text) = node.value().as_text() {
-                    let len = text.len() as i32;
-                    text_length += len;
-                    if link_depth > 0 {
-                        link_text_length += len;
-                    }
-                }
-            }
-            Edge::Close(node) => {
-                if let Some(el) = node.value().as_element() {
-                    if el.name() == "a" {
-                        link_depth -= 1;
-                    }
-                }
-            }
-        }
+    for link in element.select(&SELECTOR_A) {
+        let link_text: String = link.text().collect();
+        link_text_length += link_text.len() as i32;
+        link_count += 1;
     }
 
     text_length - link_text_length - (link_count * TEXT_DENSITY_LINK_PENALTY)
@@ -451,5 +432,13 @@ mod tests {
         let html = r#"<p><a href="/close">close</a></p>"#;
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
+    }
+
+    #[test]
+    fn calculate_text_density_score_handles_non_a_elements_on_close() {
+        let html = "<html><body><main>Test <b>bold</b> <a href=\"#\">link</a> <span>more</span></main></body></html>";
+        let doc = Html::parse_document(html);
+        let selected = apply_text_density_filter(&doc).expect("main should be selected");
+        assert_eq!(selected.value().name(), "main");
     }
 }
