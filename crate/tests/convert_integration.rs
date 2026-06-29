@@ -124,7 +124,8 @@ fn debug_lolhtml_and_dom() {
             },
         ),
     ));
-    let mut rewriter = lol_html::HtmlRewriter::new(settings, |c: &[u8]| output.extend_from_slice(c));
+    let mut rewriter =
+        lol_html::HtmlRewriter::new(settings, |c: &[u8]| output.extend_from_slice(c));
     rewriter.write(html.as_bytes()).unwrap();
     rewriter.end().unwrap();
     let stripped = unsafe { String::from_utf8_unchecked(output) };
