@@ -149,20 +149,16 @@ pub(super) fn shared_selectors_for_samples(
     if samples.is_empty() {
         return HashSet::new();
     }
-    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut counts: HashMap<&String, usize> = HashMap::new();
     for sample in samples {
         for selector in &sample.selectors {
-            if let Some(count) = counts.get_mut(selector) {
-                *count += 1;
-            } else {
-                counts.insert(selector.clone(), 1);
-            }
+            *counts.entry(selector).or_insert(0) += 1;
         }
     }
     counts
         .into_iter()
         .filter(|(_, count)| *count == samples.len())
-        .map(|(sel, _)| sel)
+        .map(|(sel, _)| sel.clone())
         .collect()
 }
 
