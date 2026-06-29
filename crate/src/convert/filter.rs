@@ -433,4 +433,12 @@ mod tests {
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
     }
+
+    #[test]
+    fn calculate_text_density_score_handles_non_a_elements_on_close() {
+        let html = "<html><body><main>Test <b>bold</b> <a href=\"#\">link</a> <span>more</span></main></body></html>";
+        let doc = Html::parse_document(html);
+        let selected = apply_text_density_filter(&doc).expect("main should be selected");
+        assert_eq!(selected.value().name(), "main");
+    }
 }
