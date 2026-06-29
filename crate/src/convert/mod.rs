@@ -68,6 +68,35 @@ fn determine_content_root<'a>(
     }
 }
 
+struct ExtractedMetadata {
+    title: Option<String>,
+    meta: serde_json::Map<String, serde_json::Value>,
+    link: serde_json::Map<String, serde_json::Value>,
+    canonical_url: Option<String>,
+    lang: Option<String>,
+}
+
+fn extract_metadata(document: &scraper::Html, options: &ConvertOptions) -> ExtractedMetadata {
+    let title = parser::extract_title(document);
+    let meta = parser::extract_meta_tags(document);
+    let link_rel_filter = if options.link_rel_tokens_to_remove.is_empty() {
+        None
+    } else {
+        Some(options.link_rel_tokens_to_remove.as_slice())
+    };
+    let link = parser::extract_link_tags(document, link_rel_filter);
+    let canonical_url = parser::extract_canonical_url(document);
+    let lang = parser::extract_lang(document);
+
+    ExtractedMetadata {
+        title,
+        meta,
+        link,
+        canonical_url,
+        lang,
+    }
+}
+
 /// Convert raw HTML into Markdown with extracted metadata.
 pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     let working_html = apply_stripping_phase(html, options);
@@ -76,16 +105,7 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
     let mut document = scraper::Html::parse_document(&working_html);
 
     // Extract metadata from this already-stripped DOM (title/meta/link still present).
-    let title = parser::extract_title(&document);
-    let meta = parser::extract_meta_tags(&document);
-    let link_rel_filter = if options.link_rel_tokens_to_remove.is_empty() {
-        None
-    } else {
-        Some(options.link_rel_tokens_to_remove.as_slice())
-    };
-    let link = parser::extract_link_tags(&document, link_rel_filter);
-    let canonical_url = parser::extract_canonical_url(&document);
-    let lang = parser::extract_lang(&document);
+    let extracted_metadata = extract_metadata(&document, options);
 
     // Filter links in-place (no re-parse).
     filter::filter_links_inplace(
@@ -102,12 +122,12 @@ pub fn convert(html: &str, options: &ConvertOptions) -> ConvertResult {
         .unwrap_or_default();
 
     ConvertResult {
-        title,
-        meta,
-        link,
+        title: extracted_metadata.title,
+        meta: extracted_metadata.meta,
+        link: extracted_metadata.link,
         content,
-        canonical_url,
-        lang,
+        canonical_url: extracted_metadata.canonical_url,
+        lang: extracted_metadata.lang,
     }
 }
 
