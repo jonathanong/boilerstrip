@@ -130,13 +130,9 @@ pub(super) fn merge_ranked_and_promoted_selectors(
     let mut selected = Vec::new();
     let mut selected_set = HashSet::new();
 
-    for selector in ranked_selectors {
-        if selected_set.insert(selector.clone()) {
-            selected.push(selector);
-        }
-    }
-    for selector in promoted_selectors {
-        if selected_set.insert(selector.clone()) {
+    for selector in ranked_selectors.into_iter().chain(promoted_selectors) {
+        if !selected_set.contains(&selector) {
+            selected_set.insert(selector.clone());
             selected.push(selector);
         }
     }
