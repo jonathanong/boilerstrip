@@ -112,22 +112,38 @@ pub fn extract_link_tags(
         }
 
         for token in rel.split_whitespace() {
-            let normalized_token = token.to_lowercase();
-            if EXCLUDED_REL_VALUES.contains(&normalized_token.as_str())
-                || custom_remove.contains(&normalized_token)
-            {
-                continue;
-            }
-            if normalized_token == "alternate" {
-                insert_alternate_link(&mut links, alternate_link_type.as_deref(), href);
-                continue;
-            }
-            links
-                .entry(normalized_token)
-                .or_insert_with(|| Value::String(href.to_string()));
+            process_link_token(
+                token,
+                href,
+                alternate_link_type.as_deref(),
+                &custom_remove,
+                &mut links,
+            );
         }
     }
     links
+}
+
+fn process_link_token(
+    token: &str,
+    href: &str,
+    alternate_link_type: Option<&str>,
+    custom_remove: &[String],
+    links: &mut Map<String, Value>,
+) {
+    let normalized_token = token.to_lowercase();
+    if EXCLUDED_REL_VALUES.contains(&normalized_token.as_str())
+        || custom_remove.contains(&normalized_token)
+    {
+        return;
+    }
+    if normalized_token == "alternate" {
+        insert_alternate_link(links, alternate_link_type, href);
+        return;
+    }
+    links
+        .entry(normalized_token)
+        .or_insert_with(|| Value::String(href.to_string()));
 }
 
 fn normalize_link_type(link_type: Option<&str>) -> Option<String> {
