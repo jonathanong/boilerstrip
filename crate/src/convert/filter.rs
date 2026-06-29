@@ -69,9 +69,20 @@ pub fn filter_links_inplace(
     link_text_content_to_remove: &[String],
     link_hrefs_to_remove: &[String],
 ) {
+    let lower_text_patterns = link_text_content_to_remove
+        .iter()
+        .map(|pattern| pattern.to_lowercase())
+        .collect::<Vec<_>>();
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(
+                el,
+                link_text_content_to_remove,
+                &lower_text_patterns,
+                link_hrefs_to_remove,
+            )
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -86,6 +97,7 @@ pub fn filter_links_inplace(
 fn should_remove_link(
     el: &ElementRef<'_>,
     link_text_content_to_remove: &[String],
+    lower_text_patterns: &[String],
     link_hrefs_to_remove: &[String],
 ) -> bool {
     let text: String = el.text().collect();
@@ -95,7 +107,7 @@ fn should_remove_link(
     (text.trim().is_empty() && !has_image)
         || href.is_none()
         || href.is_some_and(|h| h.starts_with('#'))
-        || should_remove_by_text(&text, link_text_content_to_remove)
+        || should_remove_by_text(&text, link_text_content_to_remove, lower_text_patterns)
         || should_remove_by_href(href, link_hrefs_to_remove)
 }
 
@@ -110,9 +122,20 @@ pub fn filter_links(
     link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
+    let lower_text_patterns = link_text_content_to_remove
+        .iter()
+        .map(|pattern| pattern.to_lowercase())
+        .collect::<Vec<_>>();
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
-        .filter(|el| should_remove_link(el, link_text_content_to_remove, link_hrefs_to_remove))
+        .filter(|el| {
+            should_remove_link(
+                el,
+                link_text_content_to_remove,
+                &lower_text_patterns,
+                link_hrefs_to_remove,
+            )
+        })
         .map(|el| el.id())
         .collect();
     for id in ids {
@@ -125,7 +148,7 @@ pub fn filter_links(
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
+fn should_remove_by_text(text: &str, patterns: &[String], lowered_patterns: &[String]) -> bool {
     if patterns.is_empty() {
         return false;
     }
@@ -154,9 +177,7 @@ fn should_remove_by_text(text: &str, patterns: &[String]) -> bool {
     } else {
         // Fallback for non-ASCII text
         let text_lower = text.to_lowercase();
-        patterns
-            .iter()
-            .any(|p| text_lower.contains(&p.to_lowercase()))
+        lowered_patterns.iter().any(|p| text_lower.contains(p))
     }
 }
 
