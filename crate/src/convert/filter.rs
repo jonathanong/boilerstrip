@@ -69,15 +69,19 @@ pub fn filter_links_inplace(
     link_text_content_to_remove: &[String],
     link_hrefs_to_remove: &[String],
 ) {
-    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
+    let lower_text_patterns = link_text_content_to_remove
         .iter()
-        .map(|s| s.to_lowercase())
-        .collect();
-
+        .map(|pattern| pattern.to_lowercase())
+        .collect::<Vec<_>>();
     let ids: Vec<_> = document
         .select(&SELECTOR_A_BUTTON)
         .filter(|el| {
-            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
+            should_remove_link(
+                el,
+                link_text_content_to_remove,
+                &lower_text_patterns,
+                link_hrefs_to_remove,
+            )
         })
         .map(|el| el.id())
         .collect();
@@ -93,6 +97,7 @@ pub fn filter_links_inplace(
 fn should_remove_link(
     el: &ElementRef<'_>,
     link_text_content_to_remove: &[String],
+    lower_text_patterns: &[String],
     link_hrefs_to_remove: &[String],
 ) -> bool {
     let text: String = el.text().collect();
@@ -102,7 +107,7 @@ fn should_remove_link(
     (text.trim().is_empty() && !has_image)
         || href.is_none()
         || href.is_some_and(|h| h.starts_with('#'))
-        || should_remove_by_text(&text, link_text_content_to_remove)
+        || should_remove_by_text(&text, link_text_content_to_remove, lower_text_patterns)
         || should_remove_by_href(href, link_hrefs_to_remove)
 }
 
@@ -117,14 +122,19 @@ pub fn filter_links(
     link_hrefs_to_remove: &[String],
 ) -> String {
     let mut fragment = Html::parse_fragment(html);
-    let link_text_content_to_remove_lower: Vec<String> = link_text_content_to_remove
+    let lower_text_patterns = link_text_content_to_remove
         .iter()
-        .map(|s| s.to_lowercase())
-        .collect();
+        .map(|pattern| pattern.to_lowercase())
+        .collect::<Vec<_>>();
     let ids: Vec<_> = fragment
         .select(&SELECTOR_A_BUTTON)
         .filter(|el| {
-            should_remove_link(el, &link_text_content_to_remove_lower, link_hrefs_to_remove)
+            should_remove_link(
+                el,
+                link_text_content_to_remove,
+                &lower_text_patterns,
+                link_hrefs_to_remove,
+            )
         })
         .map(|el| el.id())
         .collect();
@@ -138,13 +148,37 @@ pub fn filter_links(
     crate::util::serialize_fragment_body(&fragment)
 }
 
-fn should_remove_by_text(text: &str, patterns_lower: &[String]) -> bool {
-    if patterns_lower.is_empty() {
+fn should_remove_by_text(text: &str, patterns: &[String], lowered_patterns: &[String]) -> bool {
+    if patterns.is_empty() {
         return false;
     }
 
-    let text_lower = text.to_lowercase();
-    patterns_lower.iter().any(|p| text_lower.contains(p))
+    // Fast path: if both text and patterns are ASCII, we can do a case-insensitive
+    // substring search without allocating a new String for `text_lower` or `pattern`.
+    if text.is_ascii() {
+        let text_bytes = text.as_bytes();
+        patterns.iter().any(|p| {
+            if p.is_ascii() {
+                let p_bytes = p.as_bytes();
+                if p_bytes.is_empty() {
+                    return true;
+                }
+                if p_bytes.len() > text_bytes.len() {
+                    return false;
+                }
+                text_bytes
+                    .windows(p_bytes.len())
+                    .any(|w| w.eq_ignore_ascii_case(p_bytes))
+            } else {
+                // Fallback for non-ASCII pattern against ASCII text
+                false
+            }
+        })
+    } else {
+        // Fallback for non-ASCII text
+        let text_lower = text.to_lowercase();
+        lowered_patterns.iter().any(|p| text_lower.contains(p))
+    }
 }
 
 fn should_remove_by_href(href: Option<&str>, patterns: &[String]) -> bool {
@@ -432,6 +466,30 @@ mod tests {
         let html = r#"<p><a href="/close">close</a></p>"#;
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
+    }
+
+    #[test]
+    fn filter_links_handles_empty_pattern_in_text() {
+        let html = r#"<p><a href="/close">close</a></p>"#;
+        // An empty pattern should effectively be ignored or removed depending on logic.
+        // Wait, should_remove_by_text returns true if pattern is empty AFTER the initial guard?
+        // The initial guard is:
+        // if patterns.is_empty() { return false; }
+        // But if `patterns` contains `""` as an element:
+        // patterns.iter().any(|p| ...)
+        // A pattern of `""` will cause `is_empty()` to be true and return `true`, meaning it removes it.
+        let result = filter_links(html, &["".to_string()], &[]);
+        // original logic: text.to_lowercase().contains("") returns true.
+        // so it removes everything.
+        assert!(!result.contains(">close<"));
+        assert!(!result.contains("<a"));
+    }
+
+    #[test]
+    fn filter_links_handles_pattern_longer_than_text() {
+        let html = r#"<p><a href="/close">a</a></p>"#;
+        let result = filter_links(html, &["ab".to_string()], &[]);
+        assert!(result.contains(">a<"));
     }
 
     #[test]
