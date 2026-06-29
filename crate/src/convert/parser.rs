@@ -546,8 +546,7 @@ mod tests {
     #[test]
     fn parse_html_handles_empty_string() {
         let doc = parse_html("");
-        let html_selector = Selector::parse("html").unwrap();
-        let html = doc.select(&html_selector).next();
+        let html = doc.select(&SELECTOR_HTML).next();
         assert!(html.is_some());
     }
 
