@@ -211,9 +211,10 @@ fn is_scheme_prefix(pattern: &str) -> bool {
 
 fn normalize_href_scheme(value: &str) -> String {
     value
-        .bytes()
-        .filter(|c| !(c.is_ascii_control() || c.is_ascii_whitespace()))
-        .map(|c| c.to_ascii_lowercase() as char)
+        .chars()
+        .take(1024)
+        .filter(|c| !(c.is_control() || c.is_whitespace()))
+        .map(|c| c.to_ascii_lowercase())
         .collect::<String>()
 }
 
@@ -466,6 +467,15 @@ mod tests {
         let html = r#"<p><a href="/close">close</a></p>"#;
         let result = filter_links(html, &[], &[]);
         assert!(result.contains(">close<"));
+    }
+
+    #[test]
+    fn test_normalize_href_scheme_bypasses() {
+        assert_eq!(normalize_href_scheme("java\u{0085}script:"), "javascript:");
+        assert_eq!(normalize_href_scheme("java\u{2002}script:"), "javascript:");
+        assert_eq!(normalize_href_scheme("java\u{00A0}script:"), "javascript:");
+        assert_eq!(normalize_href_scheme("javascript:"), "javascript:");
+        assert_eq!(normalize_href_scheme("  \t java\nscript: "), "javascript:");
     }
 
     #[test]
