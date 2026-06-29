@@ -53,14 +53,13 @@ where
     let mut output = Vec::with_capacity(html.len());
 
     let element_content_handlers = build_removal_handlers(remove_selectors);
+    let settings = element_content_handlers
+        .into_iter()
+        .fold(Settings::new(), |settings, handler| {
+            settings.append_element_content_handler(handler)
+        });
 
-    let mut rewriter = HtmlRewriter::new(
-        Settings {
-            element_content_handlers,
-            ..Settings::default()
-        },
-        |c: &[u8]| output.extend_from_slice(c),
-    );
+    let mut rewriter = HtmlRewriter::new(settings, |c: &[u8]| output.extend_from_slice(c));
 
     // Our handlers always return Ok.  Ignore any lol_html internal error rather
     // than panicking; `output` may be partial in that case, which is acceptable
