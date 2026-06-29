@@ -115,21 +115,17 @@ fn debug_lolhtml_and_dom() {
 
     // Simulate what convert() does: lol_html strip pass
     let mut output = Vec::with_capacity(html.len());
-    let mut rewriter = lol_html::HtmlRewriter::new(
-        lol_html::Settings {
-            element_content_handlers: vec![(
-                std::borrow::Cow::Owned("script, style".parse::<lol_html::Selector>().unwrap()),
-                lol_html::ElementContentHandlers::default().element(
-                    |el: &mut lol_html::html_content::Element<'_, '_>| {
-                        el.remove();
-                        Ok(())
-                    },
-                ),
-            )],
-            ..lol_html::Settings::default()
-        },
-        |c: &[u8]| output.extend_from_slice(c),
-    );
+    let settings = lol_html::Settings::new().append_element_content_handler((
+        std::borrow::Cow::Owned("script, style".parse::<lol_html::Selector>().unwrap()),
+        lol_html::ElementContentHandlers::default().element(
+            |el: &mut lol_html::html_content::Element<'_, '_>| {
+                el.remove();
+                Ok(())
+            },
+        ),
+    ));
+    let mut rewriter =
+        lol_html::HtmlRewriter::new(settings, |c: &[u8]| output.extend_from_slice(c));
     rewriter.write(html.as_bytes()).unwrap();
     rewriter.end().unwrap();
     let stripped = unsafe { String::from_utf8_unchecked(output) };
