@@ -175,17 +175,20 @@ impl SelectorStats {
     }
 
     fn shared_fingerprints(&self, min_shared_pages: usize) -> HashSet<String> {
-        let mut page_counts: HashMap<String, usize> = HashMap::new();
+        let mut page_counts: HashMap<&String, usize> = HashMap::new();
         for fingerprint_matches in self.page_fingerprint_matches.values() {
             for fingerprint in fingerprint_matches.keys() {
-                *page_counts.entry(fingerprint.clone()).or_insert(0) += 1;
+                *page_counts.entry(fingerprint).or_insert(0) += 1;
             }
         }
-        page_counts
-            .into_iter()
-            .filter(|(_, count)| *count >= min_shared_pages)
-            .map(|(fp, _)| fp)
-            .collect()
+
+        let mut result = HashSet::new();
+        for (fp, count) in page_counts {
+            if count >= min_shared_pages {
+                result.insert(fp.clone());
+            }
+        }
+        result
     }
 }
 
@@ -207,8 +210,9 @@ impl SnippetCandidate {
             if let Some(pages) = self.selector_pages.get_mut(selector) {
                 pages.insert(page_index);
             } else {
-                self.selector_pages
-                    .insert(selector.clone(), HashSet::from([page_index]));
+                let mut pages = HashSet::with_capacity(1);
+                pages.insert(page_index);
+                self.selector_pages.insert(selector.clone(), pages);
             }
         }
         if snippet.len() > self.snippet.len() {
@@ -309,6 +313,46 @@ mod tests {
         stats.record(1, "shared");
         stats.record(2, "shared");
         assert!(stats.score(2, &cfg).is_none());
+    }
+
+    #[test]
+    fn learn_config_all_defaults_are_applied() {
+        let options = LearnOptions::default();
+        let cfg = LearnConfig::from_options(&options);
+
+        assert_eq!(
+            cfg.max_selector_matches_per_page,
+            MAX_SELECTOR_MATCHES_PER_PAGE
+        );
+        assert_eq!(
+            cfg.min_selector_average_stable_ratio,
+            MIN_SELECTOR_AVERAGE_STABLE_RATIO
+        );
+        assert_eq!(
+            cfg.min_selector_per_page_stable_ratio,
+            MIN_SELECTOR_PER_PAGE_STABLE_RATIO
+        );
+        assert_eq!(cfg.min_snippet_text_length, MIN_SNIPPET_TEXT_LENGTH);
+        assert_eq!(cfg.max_snippet_text_length, MAX_SNIPPET_TEXT_LENGTH);
+    }
+
+    #[test]
+    fn learn_config_all_overrides_are_applied() {
+        let options = LearnOptions {
+            max_selector_matches_per_page: Some(100),
+            min_selector_average_stable_ratio: Some(0.9),
+            min_selector_per_page_stable_ratio: Some(0.8),
+            min_snippet_text_length: Some(10),
+            max_snippet_text_length: Some(500),
+            ..Default::default()
+        };
+        let cfg = LearnConfig::from_options(&options);
+
+        assert_eq!(cfg.max_selector_matches_per_page, 100);
+        assert_eq!(cfg.min_selector_average_stable_ratio, 0.9);
+        assert_eq!(cfg.min_selector_per_page_stable_ratio, 0.8);
+        assert_eq!(cfg.min_snippet_text_length, 10);
+        assert_eq!(cfg.max_snippet_text_length, 500);
     }
 
     #[test]
