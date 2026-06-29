@@ -128,7 +128,7 @@ fn process_link_token(
     token: &str,
     href: &str,
     alternate_link_type: Option<&str>,
-    custom_remove: &[String],
+    custom_remove: &HashSet<String>,
     links: &mut Map<String, Value>,
 ) {
     let normalized_token = token.to_lowercase();
