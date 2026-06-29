@@ -102,17 +102,17 @@ pub(super) fn shared_fingerprint_for_samples(
     samples: &[PathNodeSample],
     min_shared_pages: usize,
 ) -> Option<String> {
-    let mut fingerprint_counts: HashMap<String, usize> = HashMap::new();
+    let mut fingerprint_counts: HashMap<&str, usize> = HashMap::new();
     for sample in samples {
         *fingerprint_counts
-            .entry(sample.fingerprint.clone())
+            .entry(sample.fingerprint.as_str())
             .or_insert(0) += 1;
     }
     fingerprint_counts
         .into_iter()
         .filter(|(_, count)| *count >= min_shared_pages)
         .max_by_key(|(_, count)| *count)
-        .map(|(fp, _)| fp)
+        .map(|(fp, _)| fp.to_string())
 }
 
 pub(super) fn should_skip_element(element: &ElementRef) -> bool {
