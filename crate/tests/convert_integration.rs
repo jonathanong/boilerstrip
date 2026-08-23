@@ -129,7 +129,7 @@ fn debug_lolhtml_and_dom() {
     rewriter.write(html.as_bytes()).unwrap();
     rewriter.end().unwrap();
     let stripped = unsafe { String::from_utf8_unchecked(output) };
-    println!("lol_html output: {:?}", &stripped);
+    println!("lol_html output: {:?}", stripped);
 
     // Now parse with scraper like convert() does
     let doc = scraper::Html::parse_document(&stripped);
