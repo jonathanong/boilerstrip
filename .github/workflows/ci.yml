@@ -87,7 +87,7 @@ jobs:
             --output-path target/llvm-cov/lcov.info
 
       - name: Upload Rust coverage to Codecov
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@v7.1.0
         with:
           use_oidc: true
           files: target/llvm-cov/lcov.info
